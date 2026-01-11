@@ -92,14 +92,16 @@ After completing the task, report what you changed."
         if [ $EXIT_CODE -ne 0 ]; then
             echo "    (Note: Claude exited with code $EXIT_CODE but work was done)"
         fi
+    elif [ $EXIT_CODE -eq 0 ]; then
+        # No changes but exit 0 = already done
+        git reset HEAD -q 2>/dev/null
+        mark_complete "$TASK_IDX"
+        echo "--- Task $TASK_IDX already complete (no changes needed) ---"
     else
-        # No code changes = failure
+        # No changes AND non-zero exit = real failure
         git reset HEAD -q 2>/dev/null
         echo ""
-        echo "!!! No code files were changed !!!"
-        if [ $EXIT_CODE -ne 0 ]; then
-            echo "Claude exited with error code $EXIT_CODE"
-        fi
+        echo "!!! Failed: No code changes and exit code $EXIT_CODE !!!"
         echo "Pausing. Press Enter to retry or Ctrl+C to abort."
         read
         continue
