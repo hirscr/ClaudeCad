@@ -2,7 +2,7 @@
   {
     "id": "p1-01",
     "title": "Create Three.js Viewport",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 1: Create Three.js Viewport\n\n## CONTEXT\n**Current state:** Empty Electron app. index.html has only TODO comments, no implementation.\n**Read first:** ClaudeCAD-Specification.md sections 2.4 (File Structure), 3.2 (Viewport), Appendix B (Colors)\n\n## OBJECTIVE\nCreate the Three.js viewport from scratch with proper file structure.\n\n## REQUIREMENTS\n1. Create demo/ directory\n2. Create src/renderer/styles.css with dark theme base styles\n3. Create src/renderer/renderer.js as ES module that:\n   - Imports Three.js\n   - Creates scene with dark background (#1e1e1e)\n   - Creates PerspectiveCamera\n   - Creates WebGLRenderer\n   - Adds GridHelper on XY plane (Z-up)\n   - Adds AxesHelper at origin\n   - Adds test cube (temporary, will remove later)\n   - Adds ambient and directional lights\n   - Runs animation loop\n   - Handles window resize\n4. Update index.html to link CSS and import renderer.js module\n\n## VERIFY\nRun npm start:\n- Window opens with dark background\n- Grid visible (horizontal)\n- Colored axes visible (RGB = XYZ)\n- Blue cube visible\n- Console shows success message\n- No errors\n\n## NEXT TASK\nAdd OrbitControls for camera navigation"
   },
   {
