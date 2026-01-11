@@ -99,3 +99,46 @@ resizeObserver.observe(viewportElement);
 
 // Start animation
 animate();
+
+// Chat panel resize functionality
+const chatPanel = document.getElementById('chat-panel');
+const resizeHandle = document.getElementById('chat-resize-handle');
+
+let isResizing = false;
+let startY = 0;
+let startHeight = 0;
+
+resizeHandle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  startY = e.clientY;
+  startHeight = chatPanel.offsetHeight;
+
+  // Prevent text selection during drag
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+
+  // Calculate new height (dragging up increases height, dragging down decreases)
+  const deltaY = startY - e.clientY;
+  let newHeight = startHeight + deltaY;
+
+  // Enforce constraints
+  const minHeight = 100;
+  const maxHeight = window.innerHeight * 0.6;
+
+  newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+
+  // Apply new height
+  chatPanel.style.height = `${newHeight}px`;
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    // Re-enable text selection
+    document.body.style.userSelect = '';
+  }
+});

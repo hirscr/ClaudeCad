@@ -81,6 +81,22 @@ canvas {
   border-top: 1px solid #3c3c3c;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+#chat-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: ns-resize;
+  background: transparent;
+  z-index: 10;
+}
+
+#chat-resize-handle:hover {
+  background: #4a9eff;
 }
 
 #chat-messages {

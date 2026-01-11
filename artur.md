@@ -67,3 +67,5 @@ src/
 4. Report what files you created/modified
 
 Do NOT wait for approval. Do NOT just describe what you would do. Actually write the code.
+
+**IMPORTANT:** Do NOT run `npm start` or any other verification commands. Just implement and report. Verification is done separately.
