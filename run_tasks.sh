@@ -81,12 +81,19 @@ After completing the task, report what you changed."
     if [ $EXIT_CODE -ne 0 ]; then
         echo ""
         echo "!!! Claude exited with error code $EXIT_CODE !!!"
+        echo "You can reset partial changes with: git checkout ."
         echo "Pausing. Press Enter to retry or Ctrl+C to abort."
         read
     else
         # Mark task complete on success
         mark_complete "$TASK_IDX"
         echo "--- Marked task $TASK_IDX complete ---"
+
+        # Git checkpoint after successful task
+        TASK_TITLE=$(jq -r ".[$TASK_IDX].title" prompts.json)
+        git add -A
+        git commit -m "Task $TASK_IDX complete: $TASK_TITLE" --allow-empty -q
+        echo "--- Git checkpoint: Task $TASK_IDX ---"
     fi
 
     TASK_NUM=$((TASK_NUM + 1))
