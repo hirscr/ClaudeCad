@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const pythonManager = require('./python-manager');
+const claudeManager = require('./claude-manager');
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 
@@ -34,6 +35,61 @@ ipcMain.handle('execute-code', async (event, code) => {
     return result;
   } catch (err) {
     console.error('[Main] Python execution error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
+ipcMain.handle('send-chat-message', async (event, { message, currentCode, history }) => {
+  try {
+    console.log('[Main] Received send-chat-message request');
+    console.log('[Main] Message:', message);
+    console.log('[Main] Current code length:', currentCode?.length || 0);
+    console.log('[Main] History length:', history?.length || 0);
+
+    // Send prompt to Claude
+    const rawResponse = await claudeManager.sendPrompt(message, currentCode, history);
+    console.log('[Main] Claude response received, length:', rawResponse.length);
+
+    // Parse response
+    const parsed = claudeManager.parseResponse(rawResponse);
+    console.log('[Main] Parsed code:', parsed.code ? `${parsed.code.length} chars` : 'none');
+    console.log('[Main] Explanation:', parsed.explanation.substring(0, 100));
+
+    // If code exists, execute it
+    if (parsed.code) {
+      console.log('[Main] Executing generated code...');
+      const execResult = await pythonManager.execute(parsed.code);
+
+      if (execResult.success) {
+        console.log('[Main] Code execution successful');
+        return {
+          success: true,
+          code: parsed.code,
+          explanation: parsed.explanation,
+          meshPath: execResult.mesh_path
+        };
+      } else {
+        console.error('[Main] Code execution failed:', execResult.error);
+        return {
+          success: false,
+          explanation: parsed.explanation,
+          error: `Python execution failed: ${execResult.error}`
+        };
+      }
+    } else {
+      // No code generated - just return explanation
+      console.log('[Main] No code in response, returning explanation only');
+      return {
+        success: false,
+        explanation: parsed.explanation,
+        error: 'No Python code was generated'
+      };
+    }
+  } catch (err) {
+    console.error('[Main] send-chat-message error:', err);
     return {
       success: false,
       error: err.message

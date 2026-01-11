@@ -151,6 +151,17 @@ canvas {
   background: #3a8edf;
 }
 
+#send-button:disabled {
+  background: #3c3c3c;
+  color: #888888;
+  cursor: not-allowed;
+}
+
+#chat-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Status Bar */
 #status-bar {
   height: 24px;

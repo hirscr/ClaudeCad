@@ -20,7 +20,7 @@
   {
     "id": "p3-04",
     "title": "Chat UI Message Display",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 4: Chat UI Message Display\n\n## CONTEXT\nChat panel exists but needs message rendering. User and Claude messages should display styled.\n\n## REQUIREMENTS\n1. In renderer.js (or new chat.js), add message rendering:\n   - addMessage(role, content) function\n   - role: 'user' | 'assistant' | 'error'\n2. Style per spec:\n   - User: right-aligned, accent background (#4a9eff at 20% opacity)\n   - Assistant: left-aligned, subtle background (#252526)\n   - Error: red accent (#f44747), include raw response if available\n3. Code blocks in assistant messages: show collapsed by default, click to expand\n4. Messages scroll into view when added\n5. Store messages in array for history\n\n## NOTES\n- Chat container already exists in index.html\n- Use CSS classes for styling\n- Sanitize content (no innerHTML with raw user input)\n\nProvide a plan before implementing code."
   },
   {

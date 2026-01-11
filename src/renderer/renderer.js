@@ -63,6 +63,9 @@ testCube.add(testCubeLines);
 // Placeholder for current mesh
 let currentMesh = null;
 
+// Track current Build123d code (for iterative editing)
+let currentCode = '';
+
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
@@ -584,5 +587,138 @@ window.addMessage = addMessage;
 window.messageHistory = messageHistory;
 
 // ============================================================
+// CHAT INPUT AND SEND FLOW
+// ============================================================
 
-console.log('ClaudeCAD Phase 1 Complete');
+// Get chat input elements
+const chatInput = document.getElementById('chat-input');
+const sendButton = document.getElementById('send-button');
+
+// Processing state flag
+let isProcessing = false;
+
+/**
+ * Send a chat message through the full pipeline:
+ * User -> Claude -> Python -> Mesh
+ */
+async function sendChatMessage() {
+  // Get message text
+  const message = chatInput.value.trim();
+
+  // Validate
+  if (!message) {
+    console.log('[Chat] Empty message, ignoring');
+    return;
+  }
+
+  if (isProcessing) {
+    console.log('[Chat] Already processing, ignoring');
+    return;
+  }
+
+  try {
+    // Set processing state
+    isProcessing = true;
+    chatInput.disabled = true;
+    sendButton.disabled = true;
+    sendButton.textContent = 'Sending...';
+
+    // Clear input immediately
+    chatInput.value = '';
+
+    // Add user message to chat
+    addMessage('user', message);
+
+    // Show loading state
+    showLoading();
+
+    // Build history for Claude (exclude timestamps, only role + content)
+    const history = messageHistory
+      .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+      .map(msg => ({ role: msg.role, content: msg.content }));
+
+    console.log('[Chat] Sending to Claude via IPC...');
+    console.log('[Chat] Message:', message);
+    console.log('[Chat] Current code length:', currentCode.length);
+    console.log('[Chat] History entries:', history.length);
+
+    // Call IPC
+    const result = await ipcRenderer.invoke('send-chat-message', {
+      message,
+      currentCode,
+      history
+    });
+
+    console.log('[Chat] Received result:', result);
+
+    // Hide loading
+    hideLoading();
+
+    if (result.success) {
+      // Success: code executed, mesh generated
+      console.log('[Chat] Success! Loading mesh:', result.meshPath);
+
+      // Update current code
+      currentCode = result.code;
+
+      // Add assistant message
+      addMessage('assistant', result.explanation);
+
+      // Load the mesh
+      loadMesh(result.meshPath);
+    } else {
+      // Failure: show error
+      console.error('[Chat] Failed:', result.error);
+
+      // Add assistant explanation (if any)
+      if (result.explanation) {
+        addMessage('assistant', result.explanation);
+      }
+
+      // Add error message
+      addMessage('error', result.error || 'Unknown error occurred');
+    }
+  } catch (err) {
+    console.error('[Chat] Error in sendChatMessage:', err);
+    hideLoading();
+
+    // Show error in chat
+    addMessage('error', `Failed to send message: ${err.message}`);
+  } finally {
+    // Re-enable input
+    isProcessing = false;
+    chatInput.disabled = false;
+    sendButton.disabled = false;
+    sendButton.textContent = 'Send';
+
+    // Focus input for next message
+    chatInput.focus();
+  }
+}
+
+// Send button click handler
+sendButton.addEventListener('click', () => {
+  sendChatMessage();
+});
+
+// Chat input key handler
+// Enter = send, Shift+Enter = new line
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault(); // Prevent new line
+    sendChatMessage();
+  }
+});
+
+// Expose for debugging
+window.sendChatMessage = sendChatMessage;
+
+// Expose currentCode as a getter so it always returns the latest value
+Object.defineProperty(window, 'currentCode', {
+  get: () => currentCode,
+  set: (value) => { currentCode = value; }
+});
+
+// ============================================================
+
+console.log('ClaudeCAD Phase 2 Complete');
