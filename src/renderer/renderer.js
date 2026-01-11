@@ -100,6 +100,35 @@ resizeObserver.observe(viewportElement);
 // Start animation
 animate();
 
+// Loading overlay functions
+const loadingOverlay = document.getElementById('loading-overlay');
+const statusText = document.getElementById('status-text');
+
+function showLoading() {
+  loadingOverlay.classList.remove('hidden');
+  statusText.textContent = 'Generating...';
+}
+
+function hideLoading() {
+  loadingOverlay.classList.add('hidden');
+  statusText.textContent = 'Ready';
+}
+
+// Expose loading functions on window object
+window.showLoading = showLoading;
+window.hideLoading = hideLoading;
+
+// Temporary 'L' key listener for testing
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'l' || e.key === 'L') {
+    if (loadingOverlay.classList.contains('hidden')) {
+      showLoading();
+    } else {
+      hideLoading();
+    }
+  }
+});
+
 // Chat panel resize functionality
 const chatPanel = document.getElementById('chat-panel');
 const resizeHandle = document.getElementById('chat-resize-handle');

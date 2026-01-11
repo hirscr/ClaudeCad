@@ -26,7 +26,7 @@
   {
     "id": "p1-05",
     "title": "Make Chat Panel Resizable",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 5: Make Chat Panel Resizable\n\n## CONTEXT\n**Current state:** Chat panel has fixed 180px height.\n**Read first:** ClaudeCAD-Specification.md section 3.5.1\n\n## OBJECTIVE\nAllow user to resize chat panel by dragging its top edge.\n\n## REQUIREMENTS\n1. Add resize handle div at top of chat panel (4px tall)\n2. Style handle: transparent normally, accent color (#4a9eff) on hover, ns-resize cursor\n3. Implement drag-to-resize in renderer.js:\n   - mousedown on handle: start tracking\n   - mousemove: calculate new height from mouse Y\n   - mouseup: stop tracking\n4. Enforce constraints: minimum 100px, maximum 60% of window height\n5. Prevent text selection during drag (set userSelect none)\n6. Viewport resizes automatically via ResizeObserver\n\n## EXPECTED RESULT\n- Cursor changes to resize cursor on chat top edge\n- Handle highlights blue on hover\n- Drag up = chat taller, drag down = chat shorter\n- Minimum and maximum constraints enforced\n- Viewport resizes correctly, no distortion\n\n## NEXT TASK\nAdd loading spinner overlay"
   },
   {
