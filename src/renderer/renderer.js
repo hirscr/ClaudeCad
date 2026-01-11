@@ -43,12 +43,8 @@ scene.add(gridHelper);
 const axesHelper = new THREE.AxesHelper(50);
 scene.add(axesHelper);
 
-// Test cube
-const geometry = new THREE.BoxGeometry(20, 20, 20);
-const material = new THREE.MeshStandardMaterial({ color: 0x4a9eff });
-const cube = new THREE.Mesh(geometry, material);
-cube.position.set(0, 0, 10); // Place on grid
-scene.add(cube);
+// Placeholder for current mesh
+let currentMesh = null;
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -114,9 +110,15 @@ function hideLoading() {
   statusText.textContent = 'Ready';
 }
 
+// Placeholder function for loading meshes
+function loadMesh(path) {
+  console.log('loadMesh not implemented');
+}
+
 // Expose loading functions on window object
 window.showLoading = showLoading;
 window.hideLoading = hideLoading;
+window.loadMesh = loadMesh;
 
 // Temporary 'L' key listener for testing
 document.addEventListener('keydown', (e) => {
@@ -171,3 +173,5 @@ document.addEventListener('mouseup', () => {
     document.body.style.userSelect = '';
   }
 });
+
+console.log('ClaudeCAD Phase 1 Complete');

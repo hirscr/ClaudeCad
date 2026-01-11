@@ -32,7 +32,7 @@
   {
     "id": "p1-06",
     "title": "Add Loading Spinner",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 6: Add Loading Spinner\n\n## CONTEXT\n**Current state:** Full layout with resizable chat panel.\n**Read first:** ClaudeCAD-Specification.md section 3.2.4, Appendix B\n\n## OBJECTIVE\nAdd loading spinner overlay on viewport for AI generation feedback.\n\n## REQUIREMENTS\n1. Add overlay div inside #viewport (hidden by default with CSS class)\n2. Overlay: semi-transparent dark background rgba(30,30,30,0.8), covers viewport\n3. Spinner: CSS-only rotating ring, accent color (#4a9eff), ~48px, centered\n4. Create showLoading() and hideLoading() functions, expose on window object\n5. showLoading: remove hidden class, set status text to 'Generating...'\n6. hideLoading: add hidden class, set status text to 'Ready'\n7. Add temporary 'L' key listener to toggle for testing\n\n## EXPECTED RESULT\n- L key toggles spinner overlay\n- Spinner rotates smoothly (CSS animation)\n- Scene visible but dimmed behind overlay\n- Status bar updates: 'Generating...' when visible, 'Ready' when hidden\n- Overlay only covers viewport, not header/chat/status\n\n## NEXT TASK\nRemove test cube and finalize"
   },
   {
