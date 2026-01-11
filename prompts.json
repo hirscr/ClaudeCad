@@ -8,7 +8,7 @@
   {
     "id": "p1-02",
     "title": "Add OrbitControls",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 2: Add OrbitControls\n\n## CONTEXT\n**Current state:** Static Three.js viewport with grid, axes, cube. No camera controls yet.\n**Read first:** Three.js OrbitControls documentation, spec section 3.2.2\n\n## OBJECTIVE\nAdd Three.js OrbitControls for camera navigation.\n\n## REQUIREMENTS\n1. Import OrbitControls from Three.js addons/examples\n2. Create OrbitControls with damping enabled (factor 0.05)\n3. Configure mouse buttons: left = rotate, right = pan, scroll = zoom\n4. Set camera up vector to (0,0,1) for Z-up orientation\n5. Set initial camera position for isometric-like view (e.g., 70, -70, 50)\n6. Call controls.update() in animation loop\n\n## VERIFY\nRun npm start:\n- Left mouse drag rotates view around origin\n- Right mouse drag pans the view\n- Scroll wheel zooms in/out\n- Movement is smooth with damping\n- Z-axis (blue) points UP\n\n## NEXT TASK\nAdd header bar with View dropdown"
   },
   {
