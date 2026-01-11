@@ -14,7 +14,7 @@
   {
     "id": "p2-03",
     "title": "Load glTF Mesh into Three.js",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 3: Load glTF Mesh into Three.js\n\n## CONTEXT\nPython exports mesh to temp file. Need to load it into the viewport.\n\n## REQUIREMENTS\n1. In renderer.js, add GLTFLoader import from three/addons\n2. Create loadMesh(path) function that:\n   - Shows loading spinner\n   - Removes previous mesh if exists\n   - Loads glTF from file path\n   - Adds mesh to scene\n   - Centers camera on mesh\n   - Hides loading spinner\n3. Store reference in currentMesh variable\n4. Handle load errors - show error, keep last mesh\n5. Expose loadMesh on window object for IPC\n\n## NOTES\n- GLTFLoader: import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'\n- File paths will be absolute (from temp directory)\n- Use file:// protocol for local files\n\nProvide a plan before implementing code."
   },
   {

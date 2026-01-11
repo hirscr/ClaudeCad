@@ -22,8 +22,13 @@ except ImportError:
 
 
 def read_stdin():
-    """Read all input from stdin."""
-    return sys.stdin.read()
+    """Read input from stdin until __END__ delimiter."""
+    lines = []
+    for line in sys.stdin:
+        if line.strip() == '__END__':
+            break
+        lines.append(line)
+    return ''.join(lines)
 
 
 def execute_build123d(code):

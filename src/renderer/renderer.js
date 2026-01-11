@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+// Electron IPC (available since contextIsolation is false)
+const { ipcRenderer } = require('electron');
+
 // Get viewport element
 const viewportElement = document.getElementById('viewport');
 
@@ -216,19 +219,81 @@ function centerCameraOnMesh(mesh) {
   }
 }
 
-// Expose loading functions on window object
+// Execute Build123d code via IPC
+async function executeCode(code) {
+  try {
+    console.log('[Renderer] Executing code via IPC...');
+    showLoading();
+
+    const result = await ipcRenderer.invoke('execute-code', code);
+    console.log('[Renderer] Execution result:', result);
+
+    if (result.success) {
+      // Load the mesh
+      loadMesh(result.mesh_path);
+    } else {
+      // Show error
+      console.error('[Renderer] Execution failed:', result.error);
+      statusText.textContent = `Error: ${result.error}`;
+      statusText.style.color = '#f44747';
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#ffffff';
+      }, 5000);
+
+      hideLoading();
+    }
+
+    return result;
+  } catch (err) {
+    console.error('[Renderer] IPC error:', err);
+    statusText.textContent = `Error: ${err.message}`;
+    statusText.style.color = '#f44747';
+
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#ffffff';
+    }, 5000);
+
+    hideLoading();
+    throw err;
+  }
+}
+
+// Expose functions on window object
 window.showLoading = showLoading;
 window.hideLoading = hideLoading;
 window.loadMesh = loadMesh;
+window.executeCode = executeCode;
 
-// Temporary 'L' key listener for testing
+// Temporary key listeners for testing
 document.addEventListener('keydown', (e) => {
+  // L key: toggle loading spinner
   if (e.key === 'l' || e.key === 'L') {
     if (loadingOverlay.classList.contains('hidden')) {
       showLoading();
     } else {
       hideLoading();
     }
+  }
+
+  // T key: test Python pipeline with simple box
+  if (e.key === 't' || e.key === 'T') {
+    console.log('[Renderer] Testing Python pipeline...');
+
+    const testCode = `from build123d import *
+
+# Create a simple box with a hole
+with BuildPart() as bp:
+    Box(30, 30, 20)
+    with Locations((0, 0, 20)):
+        Hole(radius=5, depth=20)
+
+part = bp.part
+`;
+
+    executeCode(testCode);
   }
 });
 
