@@ -20,7 +20,7 @@
   {
     "id": "p2-04",
     "title": "Wire Up IPC Between Main and Renderer",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 4: Wire Up IPC Between Main and Renderer\n\n## CONTEXT\nMain process manages Python. Renderer has the viewport. Need IPC to connect them.\n\n## REQUIREMENTS\n1. In main.js, set up ipcMain handlers:\n   - 'execute-code': receives code, calls pythonManager.execute(), returns result\n2. In renderer, use ipcRenderer to call main:\n   - window.executeCode(code) -> Promise<result>\n3. In index.html, add preload script for secure IPC (since contextIsolation is false, can use direct ipcRenderer)\n4. Test: hardcode a simple Build123d box, execute, load mesh\n\n## NOTES\n- require('electron').ipcRenderer in renderer\n- ipcMain.handle for async handlers\n- Return mesh_path to renderer, renderer calls loadMesh(path)\n\nProvide a plan before implementing code."
   },
   {

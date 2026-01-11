@@ -285,12 +285,12 @@ document.addEventListener('keydown', (e) => {
     const testCode = `from build123d import *
 
 # Create a simple box with a hole
-with BuildPart() as bp:
+with BuildPart() as part:
     Box(30, 30, 20)
     with Locations((0, 0, 20)):
         Hole(radius=5, depth=20)
 
-part = bp.part
+part = part.part
 `;
 
     executeCode(testCode);
