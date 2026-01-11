@@ -78,36 +78,31 @@ After completing the task, report what you changed."
         "$FULL_PROMPT"
 
     EXIT_CODE=$?
-    if [ $EXIT_CODE -ne 0 ]; then
+
+    # Check for code changes (success = code changed, regardless of exit code)
+    TASK_TITLE=$(jq -r ".[$TASK_IDX].title" prompts.json)
+    git add -A
+    CODE_CHANGES=$(git diff --cached --name-only | grep -v prompts.json | grep -v run_tasks.sh | grep -v artur.md | wc -l | tr -d ' ')
+
+    if [ "$CODE_CHANGES" -gt "0" ]; then
+        # Code changed = success (even if exit code was non-zero)
+        mark_complete "$TASK_IDX"
+        git commit -m "Task $TASK_IDX complete: $TASK_TITLE" -q
+        echo "--- Task $TASK_IDX complete ($CODE_CHANGES files changed) ---"
+        if [ $EXIT_CODE -ne 0 ]; then
+            echo "    (Note: Claude exited with code $EXIT_CODE but work was done)"
+        fi
+    else
+        # No code changes = failure
+        git reset HEAD -q 2>/dev/null
         echo ""
-        echo "!!! Claude exited with error code $EXIT_CODE !!!"
-        echo "You can reset partial changes with: git checkout ."
+        echo "!!! No code files were changed !!!"
+        if [ $EXIT_CODE -ne 0 ]; then
+            echo "Claude exited with error code $EXIT_CODE"
+        fi
         echo "Pausing. Press Enter to retry or Ctrl+C to abort."
         read
-    else
-        # Mark task complete on success
-        mark_complete "$TASK_IDX"
-        echo "--- Marked task $TASK_IDX complete ---"
-
-        # Git checkpoint after successful task
-        TASK_TITLE=$(jq -r ".[$TASK_IDX].title" prompts.json)
-        git add -A
-
-        # Check if there are actual code changes (not just prompts.json)
-        CODE_CHANGES=$(git diff --cached --name-only | grep -v prompts.json | wc -l | tr -d ' ')
-        if [ "$CODE_CHANGES" -eq "0" ]; then
-            echo ""
-            echo "!!! ERROR: No code files were changed !!!"
-            echo "Artur marked task complete without implementing anything."
-            echo "Resetting prompts.json and retrying..."
-            git checkout prompts.json
-            echo "Press Enter to retry this task..."
-            read
-            continue
-        fi
-
-        git commit -m "Task $TASK_IDX complete: $TASK_TITLE" -q
-        echo "--- Git checkpoint: Task $TASK_IDX ($CODE_CHANGES files changed) ---"
+        continue
     fi
 
     TASK_NUM=$((TASK_NUM + 1))
