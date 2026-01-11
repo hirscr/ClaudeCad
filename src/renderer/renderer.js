@@ -43,6 +43,19 @@ scene.add(gridHelper);
 const axesHelper = new THREE.AxesHelper(50);
 scene.add(axesHelper);
 
+// Test cube for view control testing
+const testCubeGeometry = new THREE.BoxGeometry(20, 20, 20);
+const testCubeMaterial = new THREE.MeshStandardMaterial({ color: 0x4a9eff });
+const testCube = new THREE.Mesh(testCubeGeometry, testCubeMaterial);
+testCube.position.set(0, 0, 10);
+scene.add(testCube);
+
+// Edge lines for test cube
+const testCubeEdges = new THREE.EdgesGeometry(testCubeGeometry);
+const testCubeLineMaterial = new THREE.LineBasicMaterial({ color: 0x6ab0ff });
+const testCubeLines = new THREE.LineSegments(testCubeEdges, testCubeLineMaterial);
+testCube.add(testCubeLines);
+
 // Placeholder for current mesh
 let currentMesh = null;
 

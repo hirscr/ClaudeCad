@@ -1,5 +1,8 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -14,7 +17,11 @@ function createWindow() {
     }
   });
 
-  win.loadFile('src/renderer/index.html');
+  if (isDev) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    win.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
+  }
 }
 
 app.whenReady().then(createWindow);

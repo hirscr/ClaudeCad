@@ -4,12 +4,15 @@
   "description": "AI-powered parametric CAD",
   "main": "src/main/main.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder"
+    "dev": "vite src/renderer",
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "package": "electron-builder"
   },
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.0.0"
+    "electron-builder": "^24.0.0",
+    "vite": "^5.0.0"
   },
   "dependencies": {
     "three": "^0.182.0"
