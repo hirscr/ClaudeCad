@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Get viewport element
 const viewportElement = document.getElementById('viewport');
@@ -123,9 +124,96 @@ function hideLoading() {
   statusText.textContent = 'Ready';
 }
 
-// Placeholder function for loading meshes
+// Load glTF mesh from file path
 function loadMesh(path) {
-  console.log('loadMesh not implemented');
+  showLoading();
+
+  // Remove previous mesh if exists
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => mat.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+    currentMesh = null;
+  }
+
+  // Create loader
+  const loader = new GLTFLoader();
+
+  // Convert to file:// URL if not already
+  const fileUrl = path.startsWith('file://') ? path : `file://${path}`;
+
+  // Load the glTF file
+  loader.load(
+    fileUrl,
+    // onLoad callback
+    (gltf) => {
+      const loadedMesh = gltf.scene;
+
+      // Add mesh to scene
+      scene.add(loadedMesh);
+      currentMesh = loadedMesh;
+
+      // Center camera on mesh
+      centerCameraOnMesh(loadedMesh);
+
+      hideLoading();
+      console.log('Mesh loaded successfully:', path);
+    },
+    // onProgress callback
+    (xhr) => {
+      const percentComplete = (xhr.loaded / xhr.total) * 100;
+      console.log(`Loading: ${percentComplete.toFixed(2)}%`);
+    },
+    // onError callback
+    (error) => {
+      console.error('Error loading mesh:', error);
+
+      // Show error to user
+      statusText.textContent = `Error: Failed to load mesh`;
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+      }, 3000);
+
+      hideLoading();
+
+      // Keep previous mesh visible (if any)
+    }
+  );
+}
+
+// Center camera on loaded mesh
+function centerCameraOnMesh(mesh) {
+  // Compute bounding box
+  const box = new THREE.Box3().setFromObject(mesh);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+
+  // Calculate distance needed to fit object in view
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * (Math.PI / 180);
+  let cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.5; // 1.5x for margin
+
+  // Set camera to isometric-like view relative to mesh center
+  const direction = new THREE.Vector3(1, -1, 0.7).normalize();
+  camera.position.copy(center).add(direction.multiplyScalar(cameraDistance));
+
+  // Update controls target to mesh center
+  controls.target.copy(center);
+  controls.update();
+
+  // Update view dropdown to custom (since we moved camera)
+  const viewDropdown = document.getElementById('view-dropdown');
+  if (viewDropdown) {
+    viewDropdown.value = 'isometric'; // Reset to isometric
+  }
 }
 
 // Expose loading functions on window object

@@ -2,13 +2,13 @@
   {
     "id": "p2-01",
     "title": "Create Python CAD Engine Script",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 1: Create Python CAD Engine Script\n\n## CONTEXT\nPhase 2: Python Backend. Need a Python script that can execute Build123d code and export meshes.\n\n## REQUIREMENTS\n1. Create src/python/cad_engine.py\n2. Script reads Build123d code from stdin\n3. Executes code in isolated namespace\n4. Exports resulting part to glTF format (temp file)\n5. Prints JSON to stdout: {\"success\": true, \"mesh_path\": \"/path/to/mesh.glb\"} or {\"success\": false, \"error\": \"message\"}\n6. Handle errors gracefully (syntax errors, geometry errors)\n\n## NOTES\n- Build123d uses: from build123d import *\n- Export with: export_gltf(part.part, path)\n- If glTF fails, fall back to STL: export_stl(part.part, path)\n- Use tempfile module for temp paths\n\nProvide a plan before implementing code."
   },
   {
     "id": "p2-02",
     "title": "Create Warm Python Subprocess Manager",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 2: Create Warm Python Subprocess Manager\n\n## CONTEXT\nNeed to keep Python process alive between requests to avoid startup latency. Electron main process manages this.\n\n## REQUIREMENTS\n1. Create src/main/python-manager.js\n2. Spawn Python subprocess on app start (node child_process)\n3. Use the venv Python: ./venv/bin/python\n4. Keep process alive, send code via stdin, read results from stdout\n5. Implement: initialize(), execute(code), shutdown()\n6. execute() returns Promise that resolves with parsed JSON result\n7. Handle process crashes - auto-restart on next execute()\n8. 10 second timeout on execute()\n\n## NOTES\n- Python script path: src/python/cad_engine.py\n- Use spawn with stdio: ['pipe', 'pipe', 'pipe']\n- Delimiter between requests: use newline or special marker\n\nProvide a plan before implementing code."
   },
   {
