@@ -86,14 +86,16 @@ document.getElementById('view-dropdown').addEventListener('change', (e) => {
   }
 });
 
-// Handle window resize
-window.addEventListener('resize', () => {
+// Handle viewport resize using ResizeObserver
+const resizeObserver = new ResizeObserver(() => {
   const width = viewportElement.clientWidth;
   const height = viewportElement.clientHeight;
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height);
 });
+
+resizeObserver.observe(viewportElement);
 
 // Start animation
 animate();

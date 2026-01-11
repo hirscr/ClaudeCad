@@ -72,11 +72,18 @@ while true; do
     echo "" >> "$TEMP_PROMPT"
     echo "After completing the task, report what you changed." >> "$TEMP_PROMPT"
 
+    echo "--- DEBUG: Prompt file: $TEMP_PROMPT ---"
+    echo "--- DEBUG: First 200 chars of prompt: ---"
+    head -c 200 "$TEMP_PROMPT"
+    echo ""
+    echo "--- DEBUG: Running claude... ---"
+
     claude -p \
         --model sonnet \
         --system-prompt "$(cat artur.md)" \
+        --output-format json \
         --dangerously-skip-permissions \
-        "$(cat "$TEMP_PROMPT")"
+        -- "$(cat "$TEMP_PROMPT")"
 
     EXIT_CODE=$?
     rm -f "$TEMP_PROMPT"
