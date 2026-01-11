@@ -2,7 +2,7 @@
   {
     "id": "p3-01",
     "title": "Create Claude Code CLI Subprocess Wrapper",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 1: Create Claude Code CLI Subprocess Wrapper\n\n## CONTEXT\nPhase 3: Claude Integration. Need to call Claude Code CLI from Electron main process.\n\n## REQUIREMENTS\n1. Create src/main/claude-manager.js\n2. Function: sendPrompt(userMessage, currentCode, chatHistory) -> Promise<string>\n3. Spawn `claude` CLI with the constructed prompt\n4. 30 second timeout - reject Promise on timeout\n5. Capture stdout as the response\n6. Handle process errors gracefully\n7. Return full Claude response text\n\n## NOTES\n- Claude CLI: `claude -p \"your prompt here\"` (single prompt mode, no interactive)\n- Use child_process.spawn with shell: true\n- Response comes on stdout\n- Don't parse response here - just return raw text\n\nProvide a plan before implementing code."
   },
   {

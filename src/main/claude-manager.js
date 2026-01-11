@@ -15,8 +15,8 @@ const { spawn } = require('child_process');
  */
 function sendPrompt(userMessage, currentCode = '', chatHistory = []) {
   return new Promise((resolve, reject) => {
-    // Construct the full prompt
-    const prompt = constructPrompt(userMessage, currentCode, chatHistory);
+    // Build the full prompt
+    const prompt = buildPrompt(userMessage, currentCode, chatHistory);
 
     console.log('[ClaudeManager] Sending prompt to Claude CLI...');
     console.log('[ClaudeManager] Prompt length:', prompt.length);
@@ -87,15 +87,15 @@ function sendPrompt(userMessage, currentCode = '', chatHistory = []) {
 }
 
 /**
- * Construct the full prompt to send to Claude.
+ * Build the full prompt to send to Claude.
  * Includes system context, current code, chat history, and user message.
  *
  * @param {string} userMessage - The user's current request
  * @param {string} currentCode - The current Build123d code
- * @param {Array} chatHistory - Previous messages
+ * @param {Array} chatHistory - Previous messages (last 5 max)
  * @returns {string} The complete prompt
  */
-function constructPrompt(userMessage, currentCode, chatHistory) {
+function buildPrompt(userMessage, currentCode, chatHistory) {
   let prompt = '';
 
   // System context
@@ -118,7 +118,9 @@ function constructPrompt(userMessage, currentCode, chatHistory) {
   prompt += 'fillet(part.edges(), radius=r)\n';
   prompt += 'chamfer(part.edges(), length=l)\n\n';
   prompt += '# Shell (hollow)\n';
-  prompt += 'shell(part.faces().sort_by(Axis.Z)[-1], thickness=t)\n';
+  prompt += 'shell(part.faces().sort_by(Axis.Z)[-1], thickness=t)\n\n';
+  prompt += '# Export (use OUTPUT_PATH placeholder)\n';
+  prompt += 'export_stl(part.part, OUTPUT_PATH)\n';
   prompt += '```\n\n';
 
   // Current code context
@@ -129,13 +131,13 @@ function constructPrompt(userMessage, currentCode, chatHistory) {
     prompt += '\n```\n\n';
   }
 
-  // Chat history (summarize if too long)
+  // Chat history (last 5 messages max)
   if (chatHistory && chatHistory.length > 0) {
     prompt += '# Conversation History\n\n';
 
-    // If history is long (>10 messages), only include recent ones
-    const recentHistory = chatHistory.length > 10
-      ? chatHistory.slice(-10)
+    // Keep only last 5 messages for context
+    const recentHistory = chatHistory.length > 5
+      ? chatHistory.slice(-5)
       : chatHistory;
 
     for (const msg of recentHistory) {
@@ -158,5 +160,6 @@ function constructPrompt(userMessage, currentCode, chatHistory) {
 }
 
 module.exports = {
-  sendPrompt
+  sendPrompt,
+  buildPrompt
 };
