@@ -385,4 +385,204 @@ document.addEventListener('mouseup', () => {
   }
 });
 
+// ============================================================
+// CHAT MESSAGE SYSTEM
+// ============================================================
+
+// Message history storage
+const messageHistory = [];
+
+// Get chat messages container
+const chatMessagesContainer = document.getElementById('chat-messages');
+
+/**
+ * Escape HTML to prevent XSS attacks
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Format timestamp
+ */
+function formatTimestamp(date) {
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+/**
+ * Parse markdown code blocks from text
+ * Returns array of { type: 'text'|'code', content: string, language?: string }
+ */
+function parseCodeBlocks(text) {
+  const parts = [];
+  const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = codeBlockRegex.exec(text)) !== null) {
+    // Add text before code block
+    if (match.index > lastIndex) {
+      const textContent = text.substring(lastIndex, match.index).trim();
+      if (textContent) {
+        parts.push({ type: 'text', content: textContent });
+      }
+    }
+
+    // Add code block
+    parts.push({
+      type: 'code',
+      language: match[1] || 'code',
+      content: match[2].trim()
+    });
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text after last code block
+  if (lastIndex < text.length) {
+    const textContent = text.substring(lastIndex).trim();
+    if (textContent) {
+      parts.push({ type: 'text', content: textContent });
+    }
+  }
+
+  // If no code blocks found, return the whole text as a single text part
+  if (parts.length === 0) {
+    parts.push({ type: 'text', content: text });
+  }
+
+  return parts;
+}
+
+/**
+ * Create a code block element with collapse/expand functionality
+ */
+function createCodeBlockElement(language, code) {
+  const codeBlock = document.createElement('div');
+  codeBlock.className = 'message-code-block';
+
+  // Create header
+  const header = document.createElement('div');
+  header.className = 'code-block-header';
+
+  const languageSpan = document.createElement('span');
+  languageSpan.className = 'code-block-language';
+  languageSpan.textContent = language;
+
+  const toggleSpan = document.createElement('span');
+  toggleSpan.className = 'code-block-toggle';
+  toggleSpan.textContent = 'Click to expand';
+
+  header.appendChild(languageSpan);
+  header.appendChild(toggleSpan);
+
+  // Create content
+  const content = document.createElement('pre');
+  content.className = 'code-block-content collapsed';
+  content.textContent = code;
+
+  // Toggle functionality
+  let isCollapsed = true;
+  header.addEventListener('click', () => {
+    isCollapsed = !isCollapsed;
+    if (isCollapsed) {
+      content.classList.add('collapsed');
+      toggleSpan.textContent = 'Click to expand';
+    } else {
+      content.classList.remove('collapsed');
+      toggleSpan.textContent = 'Click to collapse';
+    }
+  });
+
+  codeBlock.appendChild(header);
+  codeBlock.appendChild(content);
+
+  return codeBlock;
+}
+
+/**
+ * Add a message to the chat
+ * @param {string} role - 'user' | 'assistant' | 'error'
+ * @param {string} content - Message content
+ * @param {object} options - Optional parameters (rawResponse for error messages)
+ */
+function addMessage(role, content, options = {}) {
+  // Store in history
+  const message = {
+    role,
+    content,
+    timestamp: new Date(),
+    ...options
+  };
+  messageHistory.push(message);
+
+  // Create message element
+  const messageEl = document.createElement('div');
+  messageEl.className = `chat-message ${role}`;
+
+  // Create content wrapper
+  const contentEl = document.createElement('div');
+  contentEl.className = 'message-content';
+
+  // Parse content based on role
+  if (role === 'assistant') {
+    // Parse code blocks for assistant messages
+    const parts = parseCodeBlocks(content);
+
+    parts.forEach(part => {
+      if (part.type === 'text') {
+        // Add text content
+        const textEl = document.createElement('div');
+        textEl.textContent = part.content;
+        contentEl.appendChild(textEl);
+      } else if (part.type === 'code') {
+        // Add collapsible code block
+        const codeBlockEl = createCodeBlockElement(part.language, part.content);
+        contentEl.appendChild(codeBlockEl);
+      }
+    });
+  } else if (role === 'error') {
+    // Error messages: show error text and optional raw response
+    const errorText = document.createElement('div');
+    errorText.textContent = content;
+    contentEl.appendChild(errorText);
+
+    if (options.rawResponse) {
+      const rawEl = document.createElement('div');
+      rawEl.style.marginTop = '8px';
+      rawEl.style.fontSize = '11px';
+      rawEl.style.opacity = '0.8';
+      rawEl.textContent = `Raw: ${options.rawResponse}`;
+      contentEl.appendChild(rawEl);
+    }
+  } else {
+    // User messages: simple text
+    contentEl.textContent = content;
+  }
+
+  messageEl.appendChild(contentEl);
+
+  // Add timestamp
+  const timestampEl = document.createElement('div');
+  timestampEl.className = 'message-timestamp';
+  timestampEl.textContent = formatTimestamp(message.timestamp);
+  messageEl.appendChild(timestampEl);
+
+  // Add to DOM
+  chatMessagesContainer.appendChild(messageEl);
+
+  // Scroll into view
+  messageEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+// Expose message functions globally
+window.addMessage = addMessage;
+window.messageHistory = messageHistory;
+
+// ============================================================
+
 console.log('ClaudeCAD Phase 1 Complete');

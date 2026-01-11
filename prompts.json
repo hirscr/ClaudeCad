@@ -14,7 +14,7 @@
   {
     "id": "p3-03",
     "title": "Response Parser and Code Extractor",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 3: Response Parser and Code Extractor\n\n## CONTEXT\nClaude returns text with code blocks. Need to extract the Python code.\n\n## REQUIREMENTS\n1. In claude-manager.js, add parseResponse(responseText) function\n2. Returns: { code: string|null, explanation: string, raw: string }\n3. Extract code between ```python and ```\n4. If no code block found, code is null\n5. explanation = everything outside the code block (Claude's commentary)\n6. raw = original full response\n7. Handle edge cases: multiple code blocks (use first), no code block, malformed response\n\n## NOTES\n- Use regex: /```python\\n([\\s\\S]*?)```/\n- Trim whitespace from extracted code\n- If multiple blocks, warn in console but use first\n\nProvide a plan before implementing code."
   },
   {

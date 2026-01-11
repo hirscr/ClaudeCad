@@ -206,3 +206,124 @@ canvas {
     transform: rotate(360deg);
   }
 }
+
+/* Chat Messages */
+.chat-message {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-message.user {
+  align-items: flex-end;
+}
+
+.chat-message.assistant {
+  align-items: flex-start;
+}
+
+.chat-message.error {
+  align-items: flex-start;
+}
+
+.message-content {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.chat-message.user .message-content {
+  background: rgba(74, 158, 255, 0.2);
+  color: #ffffff;
+  border: 1px solid rgba(74, 158, 255, 0.3);
+}
+
+.chat-message.assistant .message-content {
+  background: #252526;
+  color: #ffffff;
+  border: 1px solid #3c3c3c;
+}
+
+.chat-message.error .message-content {
+  background: rgba(244, 71, 71, 0.15);
+  color: #f44747;
+  border: 1px solid rgba(244, 71, 71, 0.4);
+}
+
+.message-timestamp {
+  font-size: 11px;
+  color: #888888;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+/* Code blocks in messages */
+.message-code-block {
+  margin: 8px 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #2d2d30;
+  border-bottom: 1px solid #3c3c3c;
+  cursor: pointer;
+  user-select: none;
+}
+
+.code-block-header:hover {
+  background: #333337;
+}
+
+.code-block-language {
+  font-size: 11px;
+  color: #4ec9b0;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.code-block-toggle {
+  font-size: 11px;
+  color: #888888;
+}
+
+.code-block-content {
+  padding: 10px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #d4d4d4;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.code-block-content.collapsed {
+  display: none;
+}
+
+/* Smooth scrolling for chat messages */
+#chat-messages {
+  scroll-behavior: smooth;
+}
