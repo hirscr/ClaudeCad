@@ -26,13 +26,13 @@
   {
     "id": "p2-05",
     "title": "Add Test Button for Python Pipeline",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 5: Add Test Button for Python Pipeline\n\n## CONTEXT\nNeed a way to test the full pipeline: code -> Python -> mesh -> viewport.\n\n## REQUIREMENTS\n1. Add temporary 'T' key listener in renderer.js\n2. On T press:\n   - Show loading spinner\n   - Execute test code via IPC: simple box with hole\n   - Load resulting mesh\n   - Hide spinner\n   - Log success/failure to console\n3. Test code:\n```python\nfrom build123d import *\nwith BuildPart() as part:\n    Box(30, 30, 20)\n    with Locations((0, 0, 20)):\n        Hole(radius=5, depth=20)\nexport_gltf(part.part, OUTPUT_PATH)\n```\n\n## EXPECTED RESULT\nPress T -> spinner -> box with hole appears -> spinner gone\n\nProvide a plan before implementing code."
   },
   {
     "id": "p2-06",
     "title": "Error Handling and Last-Good-Mesh Fallback",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 6: Error Handling and Last-Good-Mesh Fallback\n\n## CONTEXT\nNeed robust error handling. Never leave viewport empty on error.\n\n## REQUIREMENTS\n1. In python-manager.js:\n   - Catch timeout errors (10s limit)\n   - Catch process crash errors\n   - Return structured error: {success: false, error: 'message'}\n2. In renderer.js loadMesh():\n   - On error, keep previous mesh visible\n   - Update status bar with error message (red)\n   - Log detailed error to console\n3. Store lastGoodMesh reference\n4. Add 'Retry' concept to status bar (for Phase 3)\n\n## EXPECTED RESULT\n- Bad code -> error message in status -> previous mesh still visible\n- Timeout -> 'Model taking too long' -> previous mesh still visible\n\nProvide a plan before implementing code."
   },
   {

@@ -50,7 +50,7 @@ scene.add(axesHelper);
 // Test cube for view control testing
 const testCubeGeometry = new THREE.BoxGeometry(20, 20, 20);
 const testCubeMaterial = new THREE.MeshStandardMaterial({ color: 0x4a9eff });
-const testCube = new THREE.Mesh(testCubeGeometry, testCubeMaterial);
+let testCube = new THREE.Mesh(testCubeGeometry, testCubeMaterial);
 testCube.position.set(0, 0, 10);
 scene.add(testCube);
 
@@ -159,6 +159,23 @@ function loadMesh(path) {
     // onLoad callback
     (gltf) => {
       const loadedMesh = gltf.scene;
+
+      // Remove test cube on first successful load
+      if (testCube) {
+        scene.remove(testCube);
+        testCube.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+        testCube = null;
+        console.log('Test cube removed');
+      }
 
       // Add mesh to scene
       scene.add(loadedMesh);
