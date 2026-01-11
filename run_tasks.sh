@@ -75,10 +75,10 @@ $TASK_PROMPT
 
 After completing the task, report what you changed."
 
-    claude -p \
+    # Pipe prompt via stdin to avoid shell escaping issues
+    echo "$FULL_PROMPT" | claude -p \
         --model sonnet \
-        --dangerously-skip-permissions \
-        "$FULL_PROMPT"
+        --dangerously-skip-permissions
 
     EXIT_CODE=$?
     if [ $EXIT_CODE -ne 0 ]; then
