@@ -66,21 +66,20 @@ while true; do
     echo "========================================="
     echo ""
 
-    # Build the full prompt with artur.md context included directly
-    FULL_PROMPT="$(cat artur.md)
+    # Write prompt to temp file to avoid shell escaping issues
+    TEMP_PROMPT=$(mktemp)
+    echo "$TASK_PROMPT" > "$TEMP_PROMPT"
+    echo "" >> "$TEMP_PROMPT"
+    echo "After completing the task, report what you changed." >> "$TEMP_PROMPT"
 
----
-
-$TASK_PROMPT
-
-After completing the task, report what you changed."
-
-    # Pipe prompt via stdin to avoid shell escaping issues
-    echo "$FULL_PROMPT" | claude -p \
+    claude -p \
         --model sonnet \
-        --dangerously-skip-permissions
+        --system-prompt "$(cat artur.md)" \
+        --dangerously-skip-permissions \
+        "$(cat "$TEMP_PROMPT")"
 
     EXIT_CODE=$?
+    rm -f "$TEMP_PROMPT"
     if [ $EXIT_CODE -ne 0 ]; then
         echo ""
         echo "!!! Claude exited with error code $EXIT_CODE !!!"

@@ -6,7 +6,25 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="viewport-container"></div>
+  <div id="app">
+    <div id="header">
+      <div class="header-left">
+        <span class="app-title">ClaudeCAD</span>
+      </div>
+      <div class="header-right">
+        <select id="view-dropdown">
+          <option value="isometric">Isometric</option>
+          <option value="front">Front</option>
+          <option value="back">Back</option>
+          <option value="top">Top</option>
+          <option value="bottom">Bottom</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+      </div>
+    </div>
+    <div id="viewport"></div>
+  </div>
   <script type="module" src="renderer.js"></script>
 </body>
 </html>

@@ -11,9 +11,62 @@ body {
   overflow: hidden;
 }
 
-#viewport-container {
+#app {
+  display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
+}
+
+#header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 32px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  padding: 0 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.app-title {
+  font-size: 13px;
+  color: #888888;
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+#view-dropdown {
+  background: #252526;
+  color: #ffffff;
+  border: 1px solid #3c3c3c;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+
+#view-dropdown:hover {
+  background: #2a2d2e;
+}
+
+#view-dropdown:focus {
+  border-color: #4a9eff;
+}
+
+#viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
 }
 
 canvas {

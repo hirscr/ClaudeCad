@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// Get viewport element
+const viewportElement = document.getElementById('viewport');
+
 // Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1e1e1e);
@@ -8,7 +11,7 @@ scene.background = new THREE.Color(0x1e1e1e);
 // Camera setup - Z-up orientation
 const camera = new THREE.PerspectiveCamera(
   45,
-  window.innerWidth / window.innerHeight,
+  viewportElement.clientWidth / viewportElement.clientHeight,
   0.1,
   1000
 );
@@ -17,9 +20,9 @@ camera.up.set(0, 0, 1); // Z-up orientation
 
 // Renderer setup
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(viewportElement.clientWidth, viewportElement.clientHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
-document.getElementById('viewport-container').appendChild(renderer.domElement);
+viewportElement.appendChild(renderer.domElement);
 
 // OrbitControls setup
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -62,11 +65,34 @@ function animate() {
   renderer.render(scene, camera);
 }
 
+// View preset positions
+const viewPresets = {
+  isometric: { position: [70, -70, 50], target: [0, 0, 0] },
+  front: { position: [0, -100, 0], target: [0, 0, 0] },
+  back: { position: [0, 100, 0], target: [0, 0, 0] },
+  top: { position: [0, 0, 100], target: [0, 0, 0] },
+  bottom: { position: [0, 0, -100], target: [0, 0, 0] },
+  left: { position: [-100, 0, 0], target: [0, 0, 0] },
+  right: { position: [100, 0, 0], target: [0, 0, 0] }
+};
+
+// Handle view dropdown change
+document.getElementById('view-dropdown').addEventListener('change', (e) => {
+  const preset = viewPresets[e.target.value];
+  if (preset) {
+    camera.position.set(...preset.position);
+    controls.target.set(...preset.target);
+    controls.update();
+  }
+});
+
 // Handle window resize
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const width = viewportElement.clientWidth;
+  const height = viewportElement.clientHeight;
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(width, height);
 });
 
 // Start animation

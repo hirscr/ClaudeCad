@@ -14,7 +14,7 @@
   {
     "id": "p1-03",
     "title": "Add Header with View Dropdown",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 3: Add Header with View Dropdown\n\n## CONTEXT\n**Current state:** Full-window viewport with OrbitControls working.\n**Read first:** ClaudeCAD-Specification.md section 3.1 (Layout) and 3.2.2 (View Controls), Appendix B\n\n## OBJECTIVE\nAdd header bar with app title and view preset dropdown.\n\n## REQUIREMENTS\n1. Wrap content in #app container with flexbox column layout\n2. Add #header div (32px height) containing:\n   - App title 'ClaudeCAD' on left (muted color)\n   - View dropdown on right with options: Isometric (default), Front, Back, Top, Bottom, Left, Right\n3. Style header with dark theme colors from Appendix B\n4. Update renderer.js to size canvas to #viewport div, not window\n5. Define camera positions for each view preset\n6. Handle dropdown change to snap camera to selected position\n\n## VERIFY\nRun npm start:\n- Header bar visible at top with title and dropdown\n- Selecting 'Top' shows view looking straight down at grid\n- Selecting 'Front' shows view from Y-axis direction  \n- Selecting 'Isometric' restores angled view\n- OrbitControls still work after changing preset\n\n## NEXT TASK\nAdd chat panel and status bar"
   },
   {
