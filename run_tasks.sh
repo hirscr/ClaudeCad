@@ -66,14 +66,17 @@ while true; do
     echo "========================================="
     echo ""
 
-    # Build the full prompt with task only (artur.md injected via --system-prompt)
-    FULL_PROMPT="$TASK_PROMPT
+    # Build the full prompt with artur.md context included directly
+    FULL_PROMPT="$(cat artur.md)
+
+---
+
+$TASK_PROMPT
 
 After completing the task, report what you changed."
 
     claude -p \
         --model sonnet \
-        --system-prompt "$(cat artur.md)" \
         --dangerously-skip-permissions \
         "$FULL_PROMPT"
 
@@ -92,8 +95,22 @@ After completing the task, report what you changed."
         # Git checkpoint after successful task
         TASK_TITLE=$(jq -r ".[$TASK_IDX].title" prompts.json)
         git add -A
-        git commit -m "Task $TASK_IDX complete: $TASK_TITLE" --allow-empty -q
-        echo "--- Git checkpoint: Task $TASK_IDX ---"
+
+        # Check if there are actual code changes (not just prompts.json)
+        CODE_CHANGES=$(git diff --cached --name-only | grep -v prompts.json | wc -l | tr -d ' ')
+        if [ "$CODE_CHANGES" -eq "0" ]; then
+            echo ""
+            echo "!!! ERROR: No code files were changed !!!"
+            echo "Artur marked task complete without implementing anything."
+            echo "Resetting prompts.json and retrying..."
+            git checkout prompts.json
+            echo "Press Enter to retry this task..."
+            read
+            continue
+        fi
+
+        git commit -m "Task $TASK_IDX complete: $TASK_TITLE" -q
+        echo "--- Git checkpoint: Task $TASK_IDX ($CODE_CHANGES files changed) ---"
     fi
 
     TASK_NUM=$((TASK_NUM + 1))
