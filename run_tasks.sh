@@ -66,27 +66,18 @@ while true; do
     echo "========================================="
     echo ""
 
-    # Write prompt to temp file to avoid shell escaping issues
-    TEMP_PROMPT=$(mktemp)
-    echo "$TASK_PROMPT" > "$TEMP_PROMPT"
-    echo "" >> "$TEMP_PROMPT"
-    echo "After completing the task, report what you changed." >> "$TEMP_PROMPT"
+    # Build prompt (artur.md injected via --system-prompt)
+    FULL_PROMPT="$TASK_PROMPT
 
-    echo "--- DEBUG: Prompt file: $TEMP_PROMPT ---"
-    echo "--- DEBUG: First 200 chars of prompt: ---"
-    head -c 200 "$TEMP_PROMPT"
-    echo ""
-    echo "--- DEBUG: Running claude... ---"
+After completing the task, report what you changed."
 
     claude -p \
         --model sonnet \
         --system-prompt "$(cat artur.md)" \
-        --output-format json \
         --dangerously-skip-permissions \
-        -- "$(cat "$TEMP_PROMPT")"
+        "$FULL_PROMPT"
 
     EXIT_CODE=$?
-    rm -f "$TEMP_PROMPT"
     if [ $EXIT_CODE -ne 0 ]; then
         echo ""
         echo "!!! Claude exited with error code $EXIT_CODE !!!"
