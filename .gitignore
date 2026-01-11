@@ -1,0 +1,10 @@
+node_modules/
+venv/
+*.pyc
+__pycache__/
+.DS_Store
+*.stl
+*.glb
+*.gltf
+dist/
+build/
