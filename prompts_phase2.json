@@ -1,0 +1,44 @@
+[
+  {
+    "id": "p2-01",
+    "title": "Create Python CAD Engine Script",
+    "complete": true,
+    "prompt": "# TASK 1: Create Python CAD Engine Script\n\n## CONTEXT\nPhase 2: Python Backend. Need a Python script that can execute Build123d code and export meshes.\n\n## REQUIREMENTS\n1. Create src/python/cad_engine.py\n2. Script reads Build123d code from stdin\n3. Executes code in isolated namespace\n4. Exports resulting part to glTF format (temp file)\n5. Prints JSON to stdout: {\"success\": true, \"mesh_path\": \"/path/to/mesh.glb\"} or {\"success\": false, \"error\": \"message\"}\n6. Handle errors gracefully (syntax errors, geometry errors)\n\n## NOTES\n- Build123d uses: from build123d import *\n- Export with: export_gltf(part.part, path)\n- If glTF fails, fall back to STL: export_stl(part.part, path)\n- Use tempfile module for temp paths\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p2-02",
+    "title": "Create Warm Python Subprocess Manager",
+    "complete": true,
+    "prompt": "# TASK 2: Create Warm Python Subprocess Manager\n\n## CONTEXT\nNeed to keep Python process alive between requests to avoid startup latency. Electron main process manages this.\n\n## REQUIREMENTS\n1. Create src/main/python-manager.js\n2. Spawn Python subprocess on app start (node child_process)\n3. Use the venv Python: ./venv/bin/python\n4. Keep process alive, send code via stdin, read results from stdout\n5. Implement: initialize(), execute(code), shutdown()\n6. execute() returns Promise that resolves with parsed JSON result\n7. Handle process crashes - auto-restart on next execute()\n8. 10 second timeout on execute()\n\n## NOTES\n- Python script path: src/python/cad_engine.py\n- Use spawn with stdio: ['pipe', 'pipe', 'pipe']\n- Delimiter between requests: use newline or special marker\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p2-03",
+    "title": "Load glTF Mesh into Three.js",
+    "complete": true,
+    "prompt": "# TASK 3: Load glTF Mesh into Three.js\n\n## CONTEXT\nPython exports mesh to temp file. Need to load it into the viewport.\n\n## REQUIREMENTS\n1. In renderer.js, add GLTFLoader import from three/addons\n2. Create loadMesh(path) function that:\n   - Shows loading spinner\n   - Removes previous mesh if exists\n   - Loads glTF from file path\n   - Adds mesh to scene\n   - Centers camera on mesh\n   - Hides loading spinner\n3. Store reference in currentMesh variable\n4. Handle load errors - show error, keep last mesh\n5. Expose loadMesh on window object for IPC\n\n## NOTES\n- GLTFLoader: import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'\n- File paths will be absolute (from temp directory)\n- Use file:// protocol for local files\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p2-04",
+    "title": "Wire Up IPC Between Main and Renderer",
+    "complete": true,
+    "prompt": "# TASK 4: Wire Up IPC Between Main and Renderer\n\n## CONTEXT\nMain process manages Python. Renderer has the viewport. Need IPC to connect them.\n\n## REQUIREMENTS\n1. In main.js, set up ipcMain handlers:\n   - 'execute-code': receives code, calls pythonManager.execute(), returns result\n2. In renderer, use ipcRenderer to call main:\n   - window.executeCode(code) -> Promise<result>\n3. In index.html, add preload script for secure IPC (since contextIsolation is false, can use direct ipcRenderer)\n4. Test: hardcode a simple Build123d box, execute, load mesh\n\n## NOTES\n- require('electron').ipcRenderer in renderer\n- ipcMain.handle for async handlers\n- Return mesh_path to renderer, renderer calls loadMesh(path)\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p2-05",
+    "title": "Add Test Button for Python Pipeline",
+    "complete": true,
+    "prompt": "# TASK 5: Add Test Button for Python Pipeline\n\n## CONTEXT\nNeed a way to test the full pipeline: code -> Python -> mesh -> viewport.\n\n## REQUIREMENTS\n1. Add temporary 'T' key listener in renderer.js\n2. On T press:\n   - Show loading spinner\n   - Execute test code via IPC: simple box with hole\n   - Load resulting mesh\n   - Hide spinner\n   - Log success/failure to console\n3. Test code:\n```python\nfrom build123d import *\nwith BuildPart() as part:\n    Box(30, 30, 20)\n    with Locations((0, 0, 20)):\n        Hole(radius=5, depth=20)\nexport_gltf(part.part, OUTPUT_PATH)\n```\n\n## EXPECTED RESULT\nPress T -> spinner -> box with hole appears -> spinner gone\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p2-06",
+    "title": "Error Handling and Last-Good-Mesh Fallback",
+    "complete": true,
+    "prompt": "# TASK 6: Error Handling and Last-Good-Mesh Fallback\n\n## CONTEXT\nNeed robust error handling. Never leave viewport empty on error.\n\n## REQUIREMENTS\n1. In python-manager.js:\n   - Catch timeout errors (10s limit)\n   - Catch process crash errors\n   - Return structured error: {success: false, error: 'message'}\n2. In renderer.js loadMesh():\n   - On error, keep previous mesh visible\n   - Update status bar with error message (red)\n   - Log detailed error to console\n3. Store lastGoodMesh reference\n4. Add 'Retry' concept to status bar (for Phase 3)\n\n## EXPECTED RESULT\n- Bad code -> error message in status -> previous mesh still visible\n- Timeout -> 'Model taking too long' -> previous mesh still visible\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p2-07",
+    "title": "Remove Test Cube When Real Mesh Loads",
+    "complete": true,
+    "prompt": "# TASK 7: Remove Test Cube When Real Mesh Loads\n\n## CONTEXT\nTest cube should disappear when a real mesh is loaded.\n\n## REQUIREMENTS\n1. In renderer.js, store test cube reference\n2. In loadMesh(), remove test cube from scene on first successful load\n3. Test cube only removed once (not re-added)\n4. If no mesh ever loads, test cube stays visible\n\n## EXPECTED RESULT\n- App starts: test cube visible\n- Press T (or send code): test cube disappears, real mesh appears\n- Subsequent loads just replace the mesh\n\nProvide a plan before implementing code."
+  }
+]

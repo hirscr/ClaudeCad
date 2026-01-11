@@ -1,44 +1,44 @@
 [
   {
-    "id": "p2-01",
-    "title": "Create Python CAD Engine Script",
-    "complete": true,
-    "prompt": "# TASK 1: Create Python CAD Engine Script\n\n## CONTEXT\nPhase 2: Python Backend. Need a Python script that can execute Build123d code and export meshes.\n\n## REQUIREMENTS\n1. Create src/python/cad_engine.py\n2. Script reads Build123d code from stdin\n3. Executes code in isolated namespace\n4. Exports resulting part to glTF format (temp file)\n5. Prints JSON to stdout: {\"success\": true, \"mesh_path\": \"/path/to/mesh.glb\"} or {\"success\": false, \"error\": \"message\"}\n6. Handle errors gracefully (syntax errors, geometry errors)\n\n## NOTES\n- Build123d uses: from build123d import *\n- Export with: export_gltf(part.part, path)\n- If glTF fails, fall back to STL: export_stl(part.part, path)\n- Use tempfile module for temp paths\n\nProvide a plan before implementing code."
+    "id": "p3-01",
+    "title": "Create Claude Code CLI Subprocess Wrapper",
+    "complete": false,
+    "prompt": "# TASK 1: Create Claude Code CLI Subprocess Wrapper\n\n## CONTEXT\nPhase 3: Claude Integration. Need to call Claude Code CLI from Electron main process.\n\n## REQUIREMENTS\n1. Create src/main/claude-manager.js\n2. Function: sendPrompt(userMessage, currentCode, chatHistory) -> Promise<string>\n3. Spawn `claude` CLI with the constructed prompt\n4. 30 second timeout - reject Promise on timeout\n5. Capture stdout as the response\n6. Handle process errors gracefully\n7. Return full Claude response text\n\n## NOTES\n- Claude CLI: `claude -p \"your prompt here\"` (single prompt mode, no interactive)\n- Use child_process.spawn with shell: true\n- Response comes on stdout\n- Don't parse response here - just return raw text\n\nProvide a plan before implementing code."
   },
   {
-    "id": "p2-02",
-    "title": "Create Warm Python Subprocess Manager",
-    "complete": true,
-    "prompt": "# TASK 2: Create Warm Python Subprocess Manager\n\n## CONTEXT\nNeed to keep Python process alive between requests to avoid startup latency. Electron main process manages this.\n\n## REQUIREMENTS\n1. Create src/main/python-manager.js\n2. Spawn Python subprocess on app start (node child_process)\n3. Use the venv Python: ./venv/bin/python\n4. Keep process alive, send code via stdin, read results from stdout\n5. Implement: initialize(), execute(code), shutdown()\n6. execute() returns Promise that resolves with parsed JSON result\n7. Handle process crashes - auto-restart on next execute()\n8. 10 second timeout on execute()\n\n## NOTES\n- Python script path: src/python/cad_engine.py\n- Use spawn with stdio: ['pipe', 'pipe', 'pipe']\n- Delimiter between requests: use newline or special marker\n\nProvide a plan before implementing code."
+    "id": "p3-02",
+    "title": "Build System Prompt Constructor",
+    "complete": false,
+    "prompt": "# TASK 2: Build System Prompt Constructor\n\n## CONTEXT\nNeed to construct the full prompt sent to Claude with role, API reference, and context.\n\n## REQUIREMENTS\n1. In claude-manager.js, add buildPrompt(userMessage, currentCode, chatHistory) function\n2. System prompt components:\n   - Role: \"You are a CAD assistant that generates Build123d Python code.\"\n   - Format instruction: \"Always output code in a single ```python code block. Add brief explanation after.\"\n   - Build123d reference: include essential API patterns (box, hole, fillet, shell, export)\n   - Current code (if exists): \"Current model code:\\n```python\\n{code}\\n```\"\n   - Chat history (last 5 messages max): for context\n   - User's new message\n3. Keep prompt concise - avoid bloat\n\n## NOTES\n- See Appendix A in ClaudeCAD-Specification.md for Build123d patterns\n- Export line should use OUTPUT_PATH placeholder (replaced by cad_engine.py)\n\nProvide a plan before implementing code."
   },
   {
-    "id": "p2-03",
-    "title": "Load glTF Mesh into Three.js",
-    "complete": true,
-    "prompt": "# TASK 3: Load glTF Mesh into Three.js\n\n## CONTEXT\nPython exports mesh to temp file. Need to load it into the viewport.\n\n## REQUIREMENTS\n1. In renderer.js, add GLTFLoader import from three/addons\n2. Create loadMesh(path) function that:\n   - Shows loading spinner\n   - Removes previous mesh if exists\n   - Loads glTF from file path\n   - Adds mesh to scene\n   - Centers camera on mesh\n   - Hides loading spinner\n3. Store reference in currentMesh variable\n4. Handle load errors - show error, keep last mesh\n5. Expose loadMesh on window object for IPC\n\n## NOTES\n- GLTFLoader: import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'\n- File paths will be absolute (from temp directory)\n- Use file:// protocol for local files\n\nProvide a plan before implementing code."
+    "id": "p3-03",
+    "title": "Response Parser and Code Extractor",
+    "complete": false,
+    "prompt": "# TASK 3: Response Parser and Code Extractor\n\n## CONTEXT\nClaude returns text with code blocks. Need to extract the Python code.\n\n## REQUIREMENTS\n1. In claude-manager.js, add parseResponse(responseText) function\n2. Returns: { code: string|null, explanation: string, raw: string }\n3. Extract code between ```python and ```\n4. If no code block found, code is null\n5. explanation = everything outside the code block (Claude's commentary)\n6. raw = original full response\n7. Handle edge cases: multiple code blocks (use first), no code block, malformed response\n\n## NOTES\n- Use regex: /```python\\n([\\s\\S]*?)```/\n- Trim whitespace from extracted code\n- If multiple blocks, warn in console but use first\n\nProvide a plan before implementing code."
   },
   {
-    "id": "p2-04",
-    "title": "Wire Up IPC Between Main and Renderer",
-    "complete": true,
-    "prompt": "# TASK 4: Wire Up IPC Between Main and Renderer\n\n## CONTEXT\nMain process manages Python. Renderer has the viewport. Need IPC to connect them.\n\n## REQUIREMENTS\n1. In main.js, set up ipcMain handlers:\n   - 'execute-code': receives code, calls pythonManager.execute(), returns result\n2. In renderer, use ipcRenderer to call main:\n   - window.executeCode(code) -> Promise<result>\n3. In index.html, add preload script for secure IPC (since contextIsolation is false, can use direct ipcRenderer)\n4. Test: hardcode a simple Build123d box, execute, load mesh\n\n## NOTES\n- require('electron').ipcRenderer in renderer\n- ipcMain.handle for async handlers\n- Return mesh_path to renderer, renderer calls loadMesh(path)\n\nProvide a plan before implementing code."
+    "id": "p3-04",
+    "title": "Chat UI Message Display",
+    "complete": false,
+    "prompt": "# TASK 4: Chat UI Message Display\n\n## CONTEXT\nChat panel exists but needs message rendering. User and Claude messages should display styled.\n\n## REQUIREMENTS\n1. In renderer.js (or new chat.js), add message rendering:\n   - addMessage(role, content) function\n   - role: 'user' | 'assistant' | 'error'\n2. Style per spec:\n   - User: right-aligned, accent background (#4a9eff at 20% opacity)\n   - Assistant: left-aligned, subtle background (#252526)\n   - Error: red accent (#f44747), include raw response if available\n3. Code blocks in assistant messages: show collapsed by default, click to expand\n4. Messages scroll into view when added\n5. Store messages in array for history\n\n## NOTES\n- Chat container already exists in index.html\n- Use CSS classes for styling\n- Sanitize content (no innerHTML with raw user input)\n\nProvide a plan before implementing code."
   },
   {
-    "id": "p2-05",
-    "title": "Add Test Button for Python Pipeline",
-    "complete": true,
-    "prompt": "# TASK 5: Add Test Button for Python Pipeline\n\n## CONTEXT\nNeed a way to test the full pipeline: code -> Python -> mesh -> viewport.\n\n## REQUIREMENTS\n1. Add temporary 'T' key listener in renderer.js\n2. On T press:\n   - Show loading spinner\n   - Execute test code via IPC: simple box with hole\n   - Load resulting mesh\n   - Hide spinner\n   - Log success/failure to console\n3. Test code:\n```python\nfrom build123d import *\nwith BuildPart() as part:\n    Box(30, 30, 20)\n    with Locations((0, 0, 20)):\n        Hole(radius=5, depth=20)\nexport_gltf(part.part, OUTPUT_PATH)\n```\n\n## EXPECTED RESULT\nPress T -> spinner -> box with hole appears -> spinner gone\n\nProvide a plan before implementing code."
+    "id": "p3-05",
+    "title": "Chat Input and Send Flow",
+    "complete": false,
+    "prompt": "# TASK 5: Chat Input and Send Flow\n\n## CONTEXT\nNeed to wire up chat input to send messages and trigger the full pipeline.\n\n## REQUIREMENTS\n1. Chat input: text area + Send button (already in HTML)\n2. On send (button click or Enter):\n   a. Get message text, clear input\n   b. Add user message to chat\n   c. Show loading state\n   d. Call IPC to main: 'send-chat-message' with {message, currentCode, history}\n   e. Main calls Claude, parses response, executes code if present\n   f. Main returns: {success, code, explanation, meshPath, error}\n   g. Renderer adds assistant message, loads mesh if success\n3. Disable input while processing\n4. Store currentCode in renderer (updated after successful builds)\n\n## NOTES\n- Reuse existing spinner for loading state\n- Chain: User -> Claude -> Python -> Mesh\n- Keep test 'T' key working for now\n\nProvide a plan before implementing code."
   },
   {
-    "id": "p2-06",
-    "title": "Error Handling and Last-Good-Mesh Fallback",
-    "complete": true,
-    "prompt": "# TASK 6: Error Handling and Last-Good-Mesh Fallback\n\n## CONTEXT\nNeed robust error handling. Never leave viewport empty on error.\n\n## REQUIREMENTS\n1. In python-manager.js:\n   - Catch timeout errors (10s limit)\n   - Catch process crash errors\n   - Return structured error: {success: false, error: 'message'}\n2. In renderer.js loadMesh():\n   - On error, keep previous mesh visible\n   - Update status bar with error message (red)\n   - Log detailed error to console\n3. Store lastGoodMesh reference\n4. Add 'Retry' concept to status bar (for Phase 3)\n\n## EXPECTED RESULT\n- Bad code -> error message in status -> previous mesh still visible\n- Timeout -> 'Model taking too long' -> previous mesh still visible\n\nProvide a plan before implementing code."
+    "id": "p3-06",
+    "title": "Loading States and Input Disable",
+    "complete": false,
+    "prompt": "# TASK 6: Loading States and Input Disable\n\n## CONTEXT\nUser needs visual feedback during the Claude -> Python pipeline.\n\n## REQUIREMENTS\n1. When processing starts:\n   - Show viewport spinner\n   - Disable chat input and send button\n   - Status bar: \"Generating...\" or \"Building model...\"\n2. Two-phase status:\n   - Phase 1: \"Asking Claude...\" (while waiting for Claude)\n   - Phase 2: \"Building model...\" (while Python executes)\n3. When complete:\n   - Hide spinner\n   - Enable input\n   - Status: \"Ready\" or error message\n4. Visual disabled state: input grayed out, cursor not-allowed\n\n## NOTES\n- Spinner already exists (L key toggle from Phase 1)\n- Status bar already exists\n- Add CSS for disabled state\n\nProvide a plan before implementing code."
   },
   {
-    "id": "p2-07",
-    "title": "Remove Test Cube When Real Mesh Loads",
-    "complete": true,
-    "prompt": "# TASK 7: Remove Test Cube When Real Mesh Loads\n\n## CONTEXT\nTest cube should disappear when a real mesh is loaded.\n\n## REQUIREMENTS\n1. In renderer.js, store test cube reference\n2. In loadMesh(), remove test cube from scene on first successful load\n3. Test cube only removed once (not re-added)\n4. If no mesh ever loads, test cube stays visible\n\n## EXPECTED RESULT\n- App starts: test cube visible\n- Press T (or send code): test cube disappears, real mesh appears\n- Subsequent loads just replace the mesh\n\nProvide a plan before implementing code."
+    "id": "p3-07",
+    "title": "Error Display and Retry Button",
+    "complete": false,
+    "prompt": "# TASK 7: Error Display and Retry Button\n\n## CONTEXT\nErrors need clear display with retry option. Never leave user stuck.\n\n## REQUIREMENTS\n1. Error types to handle:\n   - Claude timeout (30s): \"Claude is taking too long.\"\n   - Claude error: \"Cannot reach Claude.\"\n   - No code in response: \"Couldn't find code in response.\"\n   - Python error: \"Code error: [details]\"\n   - Python timeout (10s): \"Model taking too long to build.\"\n2. Error message in chat: red styling, show details\n3. Retry button:\n   - Appears in status bar on error\n   - Also as button in error chat message\n   - Retry re-sends last user message\n4. On retry with 'no code' error, use simplified retry prompt (see spec 5.3)\n5. Previous mesh stays visible on error\n\n## NOTES\n- Store lastUserMessage for retry\n- Retry prompt: \"Return only valid Build123d code in a single python block.\"\n\nProvide a plan before implementing code."
   }
 ]
