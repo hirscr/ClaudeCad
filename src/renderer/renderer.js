@@ -121,19 +121,41 @@ animate();
 const loadingOverlay = document.getElementById('loading-overlay');
 const statusText = document.getElementById('status-text');
 
+/**
+ * Set processing state with optional phase indicator
+ * @param {string|null} phase - 'claude' | 'python' | null
+ */
+function setProcessing(phase) {
+  if (phase === 'claude') {
+    // Phase 1: Asking Claude
+    loadingOverlay.classList.remove('hidden');
+    statusText.textContent = 'Asking Claude...';
+    statusText.style.color = '#888888';
+  } else if (phase === 'python') {
+    // Phase 2: Building model
+    loadingOverlay.classList.remove('hidden');
+    statusText.textContent = 'Building model...';
+    statusText.style.color = '#888888';
+  } else {
+    // Done: Hide loading, reset status
+    loadingOverlay.classList.add('hidden');
+    statusText.textContent = 'Ready';
+    statusText.style.color = '#888888';
+  }
+}
+
+// Legacy functions for backward compatibility
 function showLoading() {
-  loadingOverlay.classList.remove('hidden');
-  statusText.textContent = 'Generating...';
+  setProcessing('claude');
 }
 
 function hideLoading() {
-  loadingOverlay.classList.add('hidden');
-  statusText.textContent = 'Ready';
+  setProcessing(null);
 }
 
 // Load glTF mesh from file path
 function loadMesh(path) {
-  showLoading();
+  setProcessing('python');
 
   // Remove previous mesh if exists
   if (currentMesh) {
@@ -236,8 +258,11 @@ function loadMesh(path) {
 
       // Show error to user
       statusText.textContent = `Error: Failed to load mesh`;
+      statusText.style.color = '#f44747';
+
       setTimeout(() => {
         statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
       }, 3000);
 
       hideLoading();
@@ -287,7 +312,7 @@ async function executeCode(code) {
 
       setTimeout(() => {
         statusText.textContent = 'Ready';
-        statusText.style.color = '#ffffff';
+        statusText.style.color = '#888888';
       }, 5000);
 
       hideLoading();
@@ -301,7 +326,7 @@ async function executeCode(code) {
 
     setTimeout(() => {
       statusText.textContent = 'Ready';
-      statusText.style.color = '#ffffff';
+      statusText.style.color = '#888888';
     }, 5000);
 
     hideLoading();
@@ -310,6 +335,7 @@ async function executeCode(code) {
 }
 
 // Expose functions on window object
+window.setProcessing = setProcessing;
 window.showLoading = showLoading;
 window.hideLoading = hideLoading;
 window.loadMesh = loadMesh;
@@ -629,8 +655,8 @@ async function sendChatMessage() {
     // Add user message to chat
     addMessage('user', message);
 
-    // Show loading state
-    showLoading();
+    // Show loading state - Phase 1: Asking Claude
+    setProcessing('claude');
 
     // Build history for Claude (exclude timestamps, only role + content)
     const history = messageHistory
@@ -651,9 +677,6 @@ async function sendChatMessage() {
 
     console.log('[Chat] Received result:', result);
 
-    // Hide loading
-    hideLoading();
-
     if (result.success) {
       // Success: code executed, mesh generated
       console.log('[Chat] Success! Loading mesh:', result.meshPath);
@@ -664,7 +687,7 @@ async function sendChatMessage() {
       // Add assistant message
       addMessage('assistant', result.explanation);
 
-      // Load the mesh
+      // Load the mesh (this will trigger Phase 2: "Building model...")
       loadMesh(result.meshPath);
     } else {
       // Failure: show error
@@ -677,13 +700,34 @@ async function sendChatMessage() {
 
       // Add error message
       addMessage('error', result.error || 'Unknown error occurred');
+
+      // Hide loading and show error in status
+      statusText.textContent = result.error || 'Error occurred';
+      statusText.style.color = '#f44747';
+      setProcessing(null);
+
+      // Reset status after 5 seconds
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 5000);
     }
   } catch (err) {
     console.error('[Chat] Error in sendChatMessage:', err);
-    hideLoading();
 
     // Show error in chat
     addMessage('error', `Failed to send message: ${err.message}`);
+
+    // Show error in status bar
+    statusText.textContent = `Error: ${err.message}`;
+    statusText.style.color = '#f44747';
+    setProcessing(null);
+
+    // Reset status after 5 seconds
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }, 5000);
   } finally {
     // Re-enable input
     isProcessing = false;

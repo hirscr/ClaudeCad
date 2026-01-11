@@ -26,7 +26,7 @@
   {
     "id": "p3-05",
     "title": "Chat Input and Send Flow",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 5: Chat Input and Send Flow\n\n## CONTEXT\nNeed to wire up chat input to send messages and trigger the full pipeline.\n\n## REQUIREMENTS\n1. Chat input: text area + Send button (already in HTML)\n2. On send (button click or Enter):\n   a. Get message text, clear input\n   b. Add user message to chat\n   c. Show loading state\n   d. Call IPC to main: 'send-chat-message' with {message, currentCode, history}\n   e. Main calls Claude, parses response, executes code if present\n   f. Main returns: {success, code, explanation, meshPath, error}\n   g. Renderer adds assistant message, loads mesh if success\n3. Disable input while processing\n4. Store currentCode in renderer (updated after successful builds)\n\n## NOTES\n- Reuse existing spinner for loading state\n- Chain: User -> Claude -> Python -> Mesh\n- Keep test 'T' key working for now\n\nProvide a plan before implementing code."
   },
   {
