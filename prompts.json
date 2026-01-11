@@ -8,7 +8,7 @@
   {
     "id": "p3-02",
     "title": "Build System Prompt Constructor",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 2: Build System Prompt Constructor\n\n## CONTEXT\nNeed to construct the full prompt sent to Claude with role, API reference, and context.\n\n## REQUIREMENTS\n1. In claude-manager.js, add buildPrompt(userMessage, currentCode, chatHistory) function\n2. System prompt components:\n   - Role: \"You are a CAD assistant that generates Build123d Python code.\"\n   - Format instruction: \"Always output code in a single ```python code block. Add brief explanation after.\"\n   - Build123d reference: include essential API patterns (box, hole, fillet, shell, export)\n   - Current code (if exists): \"Current model code:\\n```python\\n{code}\\n```\"\n   - Chat history (last 5 messages max): for context\n   - User's new message\n3. Keep prompt concise - avoid bloat\n\n## NOTES\n- See Appendix A in ClaudeCAD-Specification.md for Build123d patterns\n- Export line should use OUTPUT_PATH placeholder (replaced by cad_engine.py)\n\nProvide a plan before implementing code."
   },
   {

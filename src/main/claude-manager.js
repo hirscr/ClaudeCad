@@ -159,7 +159,53 @@ function buildPrompt(userMessage, currentCode, chatHistory) {
   return prompt;
 }
 
+/**
+ * Parse Claude's response to extract Python code and explanation.
+ *
+ * @param {string} responseText - The raw response from Claude CLI
+ * @returns {Object} { code: string|null, explanation: string, raw: string }
+ */
+function parseResponse(responseText) {
+  // Store the original raw response
+  const raw = responseText;
+
+  // Regex to match Python code blocks: ```python\n...\n```
+  const codeBlockRegex = /```python\n([\s\S]*?)```/g;
+
+  // Find all code blocks
+  const matches = [...responseText.matchAll(codeBlockRegex)];
+
+  let code = null;
+  let explanation = responseText;
+
+  if (matches.length === 0) {
+    // No code blocks found
+    console.log('[ClaudeManager] No Python code block found in response');
+    code = null;
+    explanation = responseText.trim();
+  } else {
+    // Extract the first code block
+    code = matches[0][1].trim();
+
+    // Warn if multiple code blocks exist
+    if (matches.length > 1) {
+      console.warn(`[ClaudeManager] Multiple code blocks found (${matches.length}), using first one`);
+    }
+
+    // Extract explanation (everything outside code blocks)
+    // Remove all code blocks from the response
+    explanation = responseText.replace(codeBlockRegex, '').trim();
+  }
+
+  return {
+    code,
+    explanation,
+    raw
+  };
+}
+
 module.exports = {
   sendPrompt,
-  buildPrompt
+  buildPrompt,
+  parseResponse
 };
