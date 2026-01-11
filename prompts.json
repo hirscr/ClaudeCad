@@ -38,7 +38,7 @@
   {
     "id": "p2-07",
     "title": "Remove Test Cube When Real Mesh Loads",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 7: Remove Test Cube When Real Mesh Loads\n\n## CONTEXT\nTest cube should disappear when a real mesh is loaded.\n\n## REQUIREMENTS\n1. In renderer.js, store test cube reference\n2. In loadMesh(), remove test cube from scene on first successful load\n3. Test cube only removed once (not re-added)\n4. If no mesh ever loads, test cube stays visible\n\n## EXPECTED RESULT\n- App starts: test cube visible\n- Press T (or send code): test cube disappears, real mesh appears\n- Subsequent loads just replace the mesh\n\nProvide a plan before implementing code."
   }
 ]

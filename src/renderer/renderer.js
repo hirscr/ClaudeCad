@@ -16,8 +16,8 @@ scene.background = new THREE.Color(0x1e1e1e);
 const camera = new THREE.PerspectiveCamera(
   45,
   viewportElement.clientWidth / viewportElement.clientHeight,
-  0.1,
-  1000
+  0.01,
+  10000
 );
 camera.position.set(70, -70, 50); // Isometric-like view
 camera.up.set(0, 0, 1); // Z-up orientation
@@ -78,24 +78,25 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// View preset positions
+// View preset directions (normalized camera direction vectors)
 const viewPresets = {
-  isometric: { position: [70, -70, 50], target: [0, 0, 0] },
-  front: { position: [0, -100, 0], target: [0, 0, 0] },
-  back: { position: [0, 100, 0], target: [0, 0, 0] },
-  top: { position: [0, 0, 100], target: [0, 0, 0] },
-  bottom: { position: [0, 0, -100], target: [0, 0, 0] },
-  left: { position: [-100, 0, 0], target: [0, 0, 0] },
-  right: { position: [100, 0, 0], target: [0, 0, 0] }
+  isometric: new THREE.Vector3(1, -1, 0.7).normalize(),
+  front: new THREE.Vector3(0, -1, 0),
+  back: new THREE.Vector3(0, 1, 0),
+  top: new THREE.Vector3(0, 0, 1),
+  bottom: new THREE.Vector3(0, 0, -1),
+  left: new THREE.Vector3(-1, 0, 0),
+  right: new THREE.Vector3(1, 0, 0)
 };
 
 // Handle view dropdown change
 document.getElementById('view-dropdown').addEventListener('change', (e) => {
-  const preset = viewPresets[e.target.value];
-  if (preset) {
-    camera.position.set(...preset.position);
-    controls.target.set(...preset.target);
-    controls.update();
+  const direction = viewPresets[e.target.value];
+  if (direction) {
+    const target = currentMesh || testCube;
+    if (target) {
+      fitCameraToObject(target, direction);
+    }
   }
 });
 
@@ -160,6 +161,40 @@ function loadMesh(path) {
     (gltf) => {
       const loadedMesh = gltf.scene;
 
+      // Scale from mm (Build123d) to scene units (glTF uses meters)
+      loadedMesh.scale.set(1000, 1000, 1000);
+
+      // Rotate from Y-up (glTF) to Z-up (scene)
+      loadedMesh.rotation.x = -Math.PI / 2;
+
+      // Apply accent color material and edge lines to all meshes
+      const accentMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4a9eff,
+        side: THREE.DoubleSide
+      });
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6ab0ff });
+      let meshCount = 0;
+      loadedMesh.traverse((child) => {
+        if (child.isMesh) {
+          meshCount++;
+          // Dispose old material
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+          child.material = accentMaterial;
+
+          // Add edge lines
+          const edges = new THREE.EdgesGeometry(child.geometry);
+          const edgeLines = new THREE.LineSegments(edges, edgeMaterial);
+          child.add(edgeLines);
+        }
+      });
+      console.log(`Applied DoubleSide material and edges to ${meshCount} mesh(es)`);
+
       // Remove test cube on first successful load
       if (testCube) {
         scene.remove(testCube);
@@ -181,8 +216,8 @@ function loadMesh(path) {
       scene.add(loadedMesh);
       currentMesh = loadedMesh;
 
-      // Center camera on mesh
-      centerCameraOnMesh(loadedMesh);
+      // Fit camera to mesh
+      fitCameraToObject(loadedMesh);
 
       hideLoading();
       console.log('Mesh loaded successfully:', path);
@@ -209,31 +244,24 @@ function loadMesh(path) {
   );
 }
 
-// Center camera on loaded mesh
-function centerCameraOnMesh(mesh) {
+// Fit camera to object with optional direction
+function fitCameraToObject(object, direction = viewPresets.isometric) {
   // Compute bounding box
-  const box = new THREE.Box3().setFromObject(mesh);
+  const box = new THREE.Box3().setFromObject(object);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
 
   // Calculate distance needed to fit object in view
   const maxDim = Math.max(size.x, size.y, size.z);
   const fov = camera.fov * (Math.PI / 180);
-  let cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.5; // 1.5x for margin
+  const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.5; // 1.5x for margin
 
-  // Set camera to isometric-like view relative to mesh center
-  const direction = new THREE.Vector3(1, -1, 0.7).normalize();
-  camera.position.copy(center).add(direction.multiplyScalar(cameraDistance));
+  // Position camera along direction from center
+  camera.position.copy(center).add(direction.clone().multiplyScalar(cameraDistance));
 
-  // Update controls target to mesh center
+  // Update controls target to object center
   controls.target.copy(center);
   controls.update();
-
-  // Update view dropdown to custom (since we moved camera)
-  const viewDropdown = document.getElementById('view-dropdown');
-  if (viewDropdown) {
-    viewDropdown.value = 'isometric'; // Reset to isometric
-  }
 }
 
 // Execute Build123d code via IPC
@@ -304,7 +332,7 @@ document.addEventListener('keydown', (e) => {
 # Create a simple box with a hole
 with BuildPart() as part:
     Box(30, 30, 20)
-    with Locations((0, 0, 20)):
+    with Locations((0, 0, 10)):  # Top of centered box
         Hole(radius=5, depth=20)
 
 part = part.part
