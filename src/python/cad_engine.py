@@ -186,11 +186,15 @@ def main():
         # Extract color information from code
         colors = extract_colors(code)
 
+        # Calculate volume (Build123d provides this in cubic mm)
+        volume = part.part.volume
+
         # Success response
         print(json.dumps({
             "success": True,
             "mesh_path": mesh_path,
-            "colors": colors
+            "colors": colors,
+            "volume": volume
         }))
 
     except SyntaxError as e:

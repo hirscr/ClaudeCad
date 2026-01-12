@@ -100,6 +100,9 @@ testCube.add(testCubeLines);
 // Placeholder for current mesh
 let currentMesh = null;
 
+// Track current model volume (from Build123d, in cubic mm)
+let currentVolume = 0;
+
 // Track current Build123d code (for iterative editing)
 let currentCode = '';
 
@@ -265,6 +268,7 @@ animate();
 // Loading overlay functions
 const loadingOverlay = document.getElementById('loading-overlay');
 const statusText = document.getElementById('status-text');
+const statusStats = document.getElementById('status-stats');
 
 /**
  * Set processing state with optional phase indicator
@@ -420,6 +424,61 @@ function stopPulseAnimation() {
 }
 
 /**
+ * Calculate total face count from the current mesh
+ * @returns {number} - Total number of triangular faces
+ */
+function calculateFaceCount() {
+  if (!currentMesh) {
+    return 0;
+  }
+
+  let faceCount = 0;
+  currentMesh.traverse((child) => {
+    if (child.isMesh && child.geometry) {
+      const positions = child.geometry.attributes.position;
+      if (positions) {
+        // Each triangle has 3 vertices
+        faceCount += positions.count / 3;
+      }
+    }
+  });
+
+  return Math.floor(faceCount);
+}
+
+/**
+ * Update status bar with model statistics
+ * @param {number} volume - Volume in cubic mm (from Build123d)
+ */
+function updateModelStats(volume) {
+  if (!currentMesh) {
+    // Clear stats if no mesh
+    statusStats.textContent = '';
+    return;
+  }
+
+  const faceCount = calculateFaceCount();
+
+  // Format volume in cm³ (divide by 1000)
+  const volumeCm3 = volume / 1000;
+
+  // Format with thousands separators and appropriate decimals
+  const faceCountStr = faceCount.toLocaleString();
+  const volumeStr = volumeCm3.toFixed(2);
+
+  statusStats.textContent = `Faces: ${faceCountStr} | Volume: ${volumeStr} cm³`;
+  console.log(`[Stats] Updated: Faces=${faceCount}, Volume=${volumeStr} cm³`);
+}
+
+/**
+ * Clear model statistics from status bar
+ */
+function clearModelStats() {
+  statusStats.textContent = '';
+  console.log('[Stats] Cleared');
+}
+
+/**
  * Apply saved feature color overrides to the current mesh
  */
 function applyFeatureColors() {
@@ -453,8 +512,11 @@ function applyFeatureColors() {
 }
 
 // Load glTF mesh from file path
-function loadMesh(path) {
+function loadMesh(path, volume = 0) {
   setProcessing('python');
+
+  // Store volume for stats display
+  currentVolume = volume;
 
   // Clear hover state when loading new mesh
   if (hoveredMesh) {
@@ -597,6 +659,9 @@ function loadMesh(path) {
         fitCameraToObject(loadedMesh);
       }
 
+      // Update model statistics in status bar
+      updateModelStats(currentVolume);
+
       hideLoading();
       console.log('Mesh loaded successfully:', path);
     },
@@ -670,6 +735,10 @@ function clearViewport() {
     currentMesh = null;
     console.log('[Viewport] Mesh cleared');
   }
+
+  // Clear model statistics
+  clearModelStats();
+  currentVolume = 0;
 
   // Also remove test cube if it exists
   if (testCube) {
@@ -788,8 +857,8 @@ async function executeCode(code) {
     console.log('[Renderer] Execution result:', result);
 
     if (result.success) {
-      // Load the mesh
-      loadMesh(result.mesh_path);
+      // Load the mesh with volume data
+      loadMesh(result.mesh_path, result.volume || 0);
     } else {
       // Show error
       console.error('[Renderer] Execution failed:', result.error);
@@ -1194,6 +1263,9 @@ window.clearMeasurement = clearMeasurement;
 window.startPulseAnimation = startPulseAnimation;
 window.stopPulseAnimation = stopPulseAnimation;
 window.applyFeatureColors = applyFeatureColors;
+window.updateModelStats = updateModelStats;
+window.clearModelStats = clearModelStats;
+window.calculateFaceCount = calculateFaceCount;
 
 // ============================================================
 // WINDOW TITLE MANAGEMENT
@@ -2184,8 +2256,9 @@ async function sendChatMessage() {
       } else {
         // Success: code executed, mesh generated
         console.log('[Chat] Success! Loading mesh:', result.meshPath);
+        console.log('[Chat] Volume:', result.volume, 'mm³');
         // Load the mesh (this will trigger Phase 2: "Building model...")
-        loadMesh(result.meshPath);
+        loadMesh(result.meshPath, result.volume);
       }
     } else {
       // Failure: show error

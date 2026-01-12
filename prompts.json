@@ -92,7 +92,7 @@
   {
     "id": "p6-16",
     "title": "Remove Test Key Listeners",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 16: Remove Test Key Listeners\n\n## CONTEXT\nThe T and L keys were for testing during development. Remove them for production.\n\n## KEYS TO REMOVE\n1. **T key**: Tests Python pipeline with hardcoded box code (lines ~1461-1476)\n2. **L key**: Toggles loading spinner (lines ~1452-1458)\n\n## REQUIREMENTS\n1. Remove the T key handler and test code\n2. Remove the L key handler\n3. Keep all other key handlers (Cmd+S, Cmd+O, Escape, M, etc.)\n\n## FILES TO MODIFY\n- src/renderer/renderer.js\n\n## EXPECTED RESULT\n1. npm start\n2. Press T -> nothing happens (no test box)\n3. Press L -> nothing happens (no spinner toggle)\n4. All other shortcuts still work\n\nThis is a simple deletion task."
   },
   {

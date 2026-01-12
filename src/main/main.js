@@ -205,6 +205,7 @@ ipcMain.handle('send-chat-message', async (event, { message, currentCode, histor
           code: parsed.code,
           explanation: parsed.explanation,
           meshPath: execResult.mesh_path,
+          volume: execResult.volume, // Pass volume from Python
           newModel: parsed.newModel
         };
       }
