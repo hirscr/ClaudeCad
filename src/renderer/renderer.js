@@ -110,6 +110,10 @@ const mouse = new THREE.Vector2();
 // Store last click information
 let lastClickInfo = null;
 
+// Click marker visual
+let clickMarker = null;
+let clickMarkerTimeout = null;
+
 // Hover state tracking
 let hoveredMesh = null;
 let originalMaterial = null;
@@ -124,8 +128,7 @@ let measurePointB = null;
 let measureVisuals = {
   markerA: null,
   markerB: null,
-  line: null,
-  label: null
+  line: null
 };
 
 // Lighting
@@ -146,8 +149,8 @@ function animate() {
 // View preset directions (normalized camera direction vectors)
 const viewPresets = {
   isometric: new THREE.Vector3(1, -1, 0.7).normalize(),
-  front: new THREE.Vector3(0, -1, 0),
-  back: new THREE.Vector3(0, 1, 0),
+  front: new THREE.Vector3(0, 1, 0),
+  back: new THREE.Vector3(0, -1, 0),
   top: new THREE.Vector3(0, 0, 1),
   bottom: new THREE.Vector3(0, 0, -1),
   left: new THREE.Vector3(-1, 0, 0),
@@ -305,6 +308,7 @@ function loadMesh(path) {
       console.log(`Applied DoubleSide material and edges to ${meshCount} mesh(es)`);
 
       // Remove test cube on first successful load
+      const isFirstLoad = testCube !== null;
       if (testCube) {
         scene.remove(testCube);
         testCube.traverse((child) => {
@@ -325,8 +329,10 @@ function loadMesh(path) {
       scene.add(loadedMesh);
       currentMesh = loadedMesh;
 
-      // Fit camera to mesh
-      fitCameraToObject(loadedMesh);
+      // Only fit camera on first load, preserve user's camera position afterward
+      if (isFirstLoad) {
+        fitCameraToObject(loadedMesh);
+      }
 
       hideLoading();
       console.log('Mesh loaded successfully:', path);
@@ -367,6 +373,9 @@ function fitCameraToObject(object, direction = viewPresets.isometric) {
   const maxDim = Math.max(size.x, size.y, size.z);
   const fov = camera.fov * (Math.PI / 180);
   const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.5; // 1.5x for margin
+
+  // Reset camera up vector to Z-up for consistent orientation
+  camera.up.set(0, 0, 1);
 
   // Position camera along direction from center
   camera.position.copy(center).add(direction.clone().multiplyScalar(cameraDistance));
@@ -444,15 +453,45 @@ function clearMeasurement() {
     measureVisuals.line.material.dispose();
     measureVisuals.line = null;
   }
-  if (measureVisuals.label) {
-    scene.remove(measureVisuals.label);
-    measureVisuals.label.material.map.dispose();
-    measureVisuals.label.material.dispose();
-    measureVisuals.label = null;
-  }
 
   measurePointA = null;
   measurePointB = null;
+}
+
+/**
+ * Clear click marker from scene
+ */
+function clearClickMarker() {
+  if (clickMarkerTimeout) {
+    clearTimeout(clickMarkerTimeout);
+    clickMarkerTimeout = null;
+  }
+  if (clickMarker) {
+    scene.remove(clickMarker);
+    clickMarker.geometry.dispose();
+    clickMarker.material.dispose();
+    clickMarker = null;
+  }
+}
+
+/**
+ * Create click marker at position
+ */
+function createClickMarker(position) {
+  // Clear any existing marker
+  clearClickMarker();
+
+  // Create a small yellow sphere
+  const geometry = new THREE.SphereGeometry(1.5, 16, 16);
+  const material = new THREE.MeshBasicMaterial({ color: 0xdcdcaa }); // Warning/yellow color
+  clickMarker = new THREE.Mesh(geometry, material);
+  clickMarker.position.copy(position);
+  scene.add(clickMarker);
+
+  // Auto-remove after 5 seconds
+  clickMarkerTimeout = setTimeout(() => {
+    clearClickMarker();
+  }, 5000);
 }
 
 /**
@@ -467,44 +506,13 @@ function createMarker(position) {
 }
 
 /**
- * Create a distance label sprite
- */
-function createDistanceLabel(text) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-
-  // Background
-  ctx.fillStyle = 'rgba(37, 37, 38, 0.95)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Border
-  ctx.strokeStyle = '#4a9eff';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(0, 0, canvas.width, canvas.height);
-
-  // Text
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 32px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 128, 32);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  const material = new THREE.SpriteMaterial({ map: texture });
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(20, 5, 1);
-  return sprite;
-}
-
-/**
  * Toggle measure mode on/off
  */
 function toggleMeasureMode() {
   measureMode = !measureMode;
 
   const measureButton = document.getElementById('measure-button');
+  const measureDistance = document.getElementById('measure-distance');
   if (measureMode) {
     measureButton.classList.add('active');
     statusText.textContent = 'Measure mode: Click first point';
@@ -513,6 +521,7 @@ function toggleMeasureMode() {
   } else {
     measureButton.classList.remove('active');
     clearMeasurement();
+    measureDistance.textContent = ''; // Clear toolbar distance display
     statusText.textContent = 'Ready';
     statusText.style.color = '#888888';
     console.log('[Measure] Mode deactivated');
@@ -548,33 +557,22 @@ function handleMeasureClick(point) {
     console.log(`[Measure] Point B: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
     console.log(`[Measure] Distance: ${distanceText}`);
 
-    // Create line between points
+    // Create yellow line between points
     const lineGeometry = new THREE.BufferGeometry().setFromPoints([measurePointA, measurePointB]);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x4a9eff, linewidth: 2 });
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xdcdcaa, linewidth: 2 });
     measureVisuals.line = new THREE.Line(lineGeometry, lineMaterial);
     scene.add(measureVisuals.line);
 
-    // Create label at midpoint
-    const midpoint = new THREE.Vector3().addVectors(measurePointA, measurePointB).multiplyScalar(0.5);
-    measureVisuals.label = createDistanceLabel(distanceText);
-    measureVisuals.label.position.copy(midpoint);
-    scene.add(measureVisuals.label);
+    // Display distance in toolbar (no floating label)
+    document.getElementById('measure-distance').textContent = distanceText;
 
     // Exit measure mode
     measureMode = false;
     const measureButton = document.getElementById('measure-button');
     measureButton.classList.remove('active');
 
-    statusText.textContent = `Distance: ${distanceText}`;
-    statusText.style.color = '#4ec9b0';
-
-    // Reset status after 5 seconds
-    setTimeout(() => {
-      if (statusText.textContent === `Distance: ${distanceText}`) {
-        statusText.textContent = 'Ready';
-        statusText.style.color = '#888888';
-      }
-    }, 5000);
+    statusText.textContent = 'Ready';
+    statusText.style.color = '#888888';
   }
 }
 
@@ -594,16 +592,28 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Escape key: clear measurement and exit measure mode
+  // Escape key: clear various states
   if (e.key === 'Escape') {
+    // Clear click marker if present
+    if (clickMarker) {
+      clearClickMarker();
+      lastClickInfo = null;
+    }
+
+    // Clear measurement visuals and/or exit measure mode
     if (measureMode || measurePointA || measurePointB) {
+      // Always clear measurement visuals
+      clearMeasurement();
+      // Clear toolbar distance display
+      document.getElementById('measure-distance').textContent = '';
+      // Exit measure mode if active
       if (measureMode) {
-        toggleMeasureMode();
-      } else {
-        clearMeasurement();
-        statusText.textContent = 'Ready';
-        statusText.style.color = '#888888';
+        measureMode = false;
+        document.getElementById('measure-button').classList.remove('active');
       }
+      // Reset status
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
     }
   }
 
@@ -911,15 +921,14 @@ async function sendChatMessage() {
     return;
   }
 
+  // Clear input immediately
+  chatInput.value = '';
   try {
     // Set processing state
     isProcessing = true;
     chatInput.disabled = true;
     sendButton.disabled = true;
     sendButton.textContent = 'Sending...';
-
-    // Clear input immediately
-    chatInput.value = '';
 
     // Add user message to chat
     addMessage('user', message);
@@ -944,6 +953,9 @@ async function sendChatMessage() {
         console.log('[Chat] Including recent click info from', (timeSinceClick / 1000).toFixed(1), 'seconds ago');
       }
     }
+
+    // Clear click marker when sending
+    clearClickMarker();
 
     console.log('[Chat] Sending to Claude via IPC...');
     console.log('[Chat] Message:', message);
@@ -1003,7 +1015,7 @@ async function sendChatMessage() {
       }, 5000);
     }
   } catch (err) {
-    console.error('[Chat] Error in sendChatMessage:', err);
+    console.error('[Chat] Error in executeChatMessage:', err);
 
     // Show error in chat
     addMessage('error', `Failed to send message: ${err.message}`);
@@ -1268,6 +1280,9 @@ renderer.domElement.addEventListener('click', (event) => {
         timestamp: Date.now()
       };
 
+      // Create visual marker at click point
+      createClickMarker(point);
+
       // Log with formatted output
       console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
       console.log(`[Raycaster] Normal: (${worldNormal.x.toFixed(3)}, ${worldNormal.y.toFixed(3)}, ${worldNormal.z.toFixed(3)})`);
@@ -1282,6 +1297,9 @@ renderer.domElement.addEventListener('click', (event) => {
         normal: null,
         timestamp: Date.now()
       };
+
+      // Create visual marker at click point
+      createClickMarker(point);
 
       console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
       console.log(`[Raycaster] Warning: No face normal available`);

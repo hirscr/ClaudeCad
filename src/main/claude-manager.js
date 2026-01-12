@@ -109,10 +109,16 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
 
   // Build123d code requirements (minimal - Claude knows the API)
   prompt += '# Code Requirements\n\n';
-  prompt += '1. Use exactly: `with BuildPart() as part:`\n';
-  prompt += '2. Put all geometry inside the with block\n';
-  prompt += '3. DO NOT include any export line - handled automatically\n';
-  prompt += '4. Use any valid Build123d operations\n\n';
+  prompt += 'CRITICAL - Your code MUST use this exact structure:\n';
+  prompt += '```\n';
+  prompt += 'with BuildPart() as part:\n';
+  prompt += '    # all geometry here\n';
+  prompt += '```\n';
+  prompt += 'The variable MUST be named `part`. Code will fail without this structure.\n\n';
+  prompt += 'Other requirements:\n';
+  prompt += '- Put all geometry inside the with block\n';
+  prompt += '- DO NOT include any export line - handled automatically\n';
+  prompt += '- Use any valid Build123d operations\n\n';
 
   // Limitations
   prompt += '# Limitations\n\n';

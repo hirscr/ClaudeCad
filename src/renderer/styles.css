@@ -379,3 +379,19 @@ canvas {
 #chat-messages {
   scroll-behavior: smooth;
 }
+
+/* Measure Distance Display */
+#measure-distance {
+  font-size: 12px;
+  color: #4ec9b0;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: rgba(78, 201, 176, 0.15);
+  border: 1px solid rgba(78, 201, 176, 0.3);
+  border-radius: 3px;
+}
+
+#measure-distance:empty {
+  display: none;
+}
+

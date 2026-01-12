@@ -480,6 +480,25 @@ Include in `demo/` folder:
    - Grid toggle (show/hide XY grid)
    - Fit to view button (reset camera to frame model)
    - Axes toggle (show/hide XYZ axes)
+   - Clear button (reset to blank state)
+   - Save/Load buttons
+
+### Phase 7: Design Assistant
+
+1. `/design` command triggers spec-writing mode
+2. Claude asks structured questions:
+   - Overall dimensions and scale
+   - Key features and their positions
+   - Level of detail (simplified vs detailed)
+   - Style reference (cartoon, realistic, etc.)
+3. Claude generates structured specification:
+   - Coordinate system and conventions
+   - Each feature with primitives, exact dimensions, positions
+   - Boolean operations (union, subtract, intersect)
+   - Optional details (fillets, chamfers)
+4. User can refine spec conversationally ("make the head bigger")
+5. "Build it" command or Generate button executes the spec
+6. Spec displayed in collapsible panel for reference/editing
 
 ---
 
