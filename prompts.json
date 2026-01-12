@@ -32,13 +32,19 @@
   {
     "id": "p3-06",
     "title": "Loading States and Input Disable",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 6: Loading States and Input Disable\n\n## CONTEXT\nUser needs visual feedback during the Claude -> Python pipeline.\n\n## REQUIREMENTS\n1. When processing starts:\n   - Show viewport spinner\n   - Disable chat input and send button\n   - Status bar: \"Generating...\" or \"Building model...\"\n2. Two-phase status:\n   - Phase 1: \"Asking Claude...\" (while waiting for Claude)\n   - Phase 2: \"Building model...\" (while Python executes)\n3. When complete:\n   - Hide spinner\n   - Enable input\n   - Status: \"Ready\" or error message\n4. Visual disabled state: input grayed out, cursor not-allowed\n\n## NOTES\n- Spinner already exists (L key toggle from Phase 1)\n- Status bar already exists\n- Add CSS for disabled state\n\nProvide a plan before implementing code."
   },
   {
     "id": "p3-07",
     "title": "Error Display and Retry Button",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 7: Error Display and Retry Button\n\n## CONTEXT\nErrors need clear display with retry option. Never leave user stuck.\n\n## REQUIREMENTS\n1. Error types to handle:\n   - Claude timeout (30s): \"Claude is taking too long.\"\n   - Claude error: \"Cannot reach Claude.\"\n   - No code in response: \"Couldn't find code in response.\"\n   - Python error: \"Code error: [details]\"\n   - Python timeout (10s): \"Model taking too long to build.\"\n2. Error message in chat: red styling, show details\n3. Retry button:\n   - Appears in status bar on error\n   - Also as button in error chat message\n   - Retry re-sends last user message\n4. On retry with 'no code' error, use simplified retry prompt (see spec 5.3)\n5. Previous mesh stays visible on error\n\n## NOTES\n- Store lastUserMessage for retry\n- Retry prompt: \"Return only valid Build123d code in a single python block.\"\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p3-bugfix-01",
+    "title": "Fix Claude CLI Shell Escaping Bug",
+    "complete": false,
+    "prompt": "# BUGFIX: Claude CLI Shell Escaping Issue\n\n## PROBLEM\nClaude CLI times out every time. The prompt never reaches Claude.\n\n## OBSERVED BEHAVIOR\n- User types message in chat\n- Console shows \"Sending to Claude via IPC...\"\n- After 30 seconds, timeout error appears\n- Claude never responds\n\n## SUSPECTED CAUSE\nThe prompt contains markdown code blocks with triple backticks. These may be getting corrupted by shell interpretation when spawning the Claude CLI process.\n\n## FILE TO INVESTIGATE\nsrc/main/claude-manager.js - the sendPrompt function that spawns the Claude CLI\n\n## EXPECTED RESULT\n1. npm start\n2. Type \"Create a simple box\" in chat\n3. Claude responds with code\n4. Mesh renders in viewport\n\nProvide a plan before implementing code."
   }
 ]

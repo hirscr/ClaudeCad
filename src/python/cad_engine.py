@@ -97,8 +97,8 @@ def main():
         # Execute the code
         part = execute_build123d(code)
 
-        # Export to mesh format
-        mesh_path = export_mesh(part)
+        # Export to mesh format (part.part is the actual geometry)
+        mesh_path = export_mesh(part.part)
 
         # Success response
         print(json.dumps({

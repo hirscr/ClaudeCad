@@ -22,11 +22,14 @@ function sendPrompt(userMessage, currentCode = '', chatHistory = []) {
     console.log('[ClaudeManager] Prompt length:', prompt.length);
 
     // Spawn Claude CLI process
-    // Using shell: true to properly handle command execution
-    const process = spawn('claude', ['-p', prompt], {
-      shell: true,
+    // Use stdin to pass prompt (avoids shell escaping issues with backticks)
+    const process = spawn('claude', ['--print'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
+
+    // Write prompt to stdin and close it
+    process.stdin.write(prompt);
+    process.stdin.end();
 
     let stdoutData = '';
     let stderrData = '';
@@ -102,26 +105,24 @@ function buildPrompt(userMessage, currentCode, chatHistory) {
   prompt += '# Role\n\n';
   prompt += 'You are a CAD assistant that generates Build123d Python code for 3D models.\n\n';
 
-  // Build123d API reference (condensed)
-  prompt += '# Build123d Quick Reference\n\n';
-  prompt += '```python\n';
-  prompt += 'from build123d import *\n\n';
-  prompt += '# Basic shapes\n';
-  prompt += 'with BuildPart() as part:\n';
-  prompt += '    Box(width, depth, height)\n';
-  prompt += '    Cylinder(radius, height)\n';
-  prompt += '    Sphere(radius)\n\n';
-  prompt += '# Holes\n';
-  prompt += 'with Locations((x, y, z)):\n';
-  prompt += '    Hole(radius=r, depth=d)\n\n';
-  prompt += '# Fillets and chamfers\n';
-  prompt += 'fillet(part.edges(), radius=r)\n';
-  prompt += 'chamfer(part.edges(), length=l)\n\n';
-  prompt += '# Shell (hollow)\n';
-  prompt += 'shell(part.faces().sort_by(Axis.Z)[-1], thickness=t)\n\n';
-  prompt += '# Export (use OUTPUT_PATH placeholder)\n';
-  prompt += 'export_stl(part.part, OUTPUT_PATH)\n';
-  prompt += '```\n\n';
+  // Build123d code requirements (minimal - Claude knows the API)
+  prompt += '# Code Requirements\n\n';
+  prompt += '1. Use exactly: `with BuildPart() as part:`\n';
+  prompt += '2. Put all geometry inside the with block\n';
+  prompt += '3. DO NOT include any export line - handled automatically\n';
+  prompt += '4. Use any valid Build123d operations\n\n';
+
+  // Limitations
+  prompt += '# Limitations\n\n';
+  prompt += '- Only uniform scaling is supported (no stretched/squashed shapes like ellipsoids)\n';
+  prompt += '- No freeform/organic surfaces\n';
+  prompt += '- No text or fonts\n';
+  prompt += '- Keep geometry relatively simple - basic shapes, holes, fillets, shells\n\n';
+
+  // Complexity handling
+  prompt += '# If Request Is Too Complex\n\n';
+  prompt += 'If you cannot create what the user asked for, say "I can\'t make that because it\'s too complicated" and suggest a simpler alternative. ';
+  prompt += 'For example: "I can\'t make ellipsoid eyes - would sphere eyes work instead?"\n\n';
 
   // Current code context
   if (currentCode && currentCode.trim()) {
@@ -150,7 +151,8 @@ function buildPrompt(userMessage, currentCode, chatHistory) {
   prompt += '1. Generate valid Build123d Python code in a single ```python code block\n';
   prompt += '2. Include a brief explanation of what you changed/created\n';
   prompt += '3. Ensure all measurements are in millimeters\n';
-  prompt += '4. The code should be complete and executable\n\n';
+  prompt += '4. The code should be complete and executable\n';
+  prompt += '5. Do NOT include any export lines (export_stl, export_gltf, etc.) - the system handles export automatically\n\n';
 
   // User's current request
   prompt += '# User Request\n\n';

@@ -472,7 +472,8 @@ Include in `demo/` folder:
 3. File menu (New, Open, Save, Export)
 4. Pre-demo checklist script (`npm run check`)
 5. Fallback demo mode with canned models
-6. Toolbar controls next to View dropdown:
+6. Remove test key listeners (T key test pipeline, L key spinner toggle)
+7. Toolbar controls next to View dropdown:
    - Render mode selector (Solid | Wireframe | X-Ray)
    - Undo/Redo buttons (Undo restores previous code, Redo re-sends last request)
    - Measure tool toggle (activates two-click distance mode from Phase 4)

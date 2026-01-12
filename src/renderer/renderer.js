@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Electron IPC (available since contextIsolation is false)
@@ -28,15 +28,12 @@ renderer.setSize(viewportElement.clientWidth, viewportElement.clientHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 viewportElement.appendChild(renderer.domElement);
 
-// OrbitControls setup
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; // Smooth damping
-controls.dampingFactor = 0.05;
-controls.mouseButtons = {
-  LEFT: THREE.MOUSE.ROTATE,   // Left button: rotate
-  MIDDLE: THREE.MOUSE.DOLLY,  // Middle button: zoom
-  RIGHT: THREE.MOUSE.PAN      // Right button: pan
-};
+// TrackballControls setup - full free rotation in all directions
+const controls = new TrackballControls(camera, renderer.domElement);
+controls.rotateSpeed = 2.0;
+controls.zoomSpeed = 1.2;
+controls.panSpeed = 0.8;
+controls.dynamicDampingFactor = 0.1;
 
 // Grid on XY plane (Z-up)
 const gridHelper = new THREE.GridHelper(100, 10, 0x3c3c3c, 0x3c3c3c);
@@ -46,6 +43,37 @@ scene.add(gridHelper);
 // Axes helper (RGB = XYZ)
 const axesHelper = new THREE.AxesHelper(50);
 scene.add(axesHelper);
+
+// Axis labels using canvas sprites
+function createAxisLabel(text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.font = 'bold 48px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 32, 32);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(8, 8, 1);
+  return sprite;
+}
+
+const labelX = createAxisLabel('X', '#ff4444');
+labelX.position.set(55, 0, 0);
+scene.add(labelX);
+
+const labelY = createAxisLabel('Y', '#44ff44');
+labelY.position.set(0, 55, 0);
+scene.add(labelY);
+
+const labelZ = createAxisLabel('Z', '#4444ff');
+labelZ.position.set(0, 0, 55);
+scene.add(labelZ);
 
 // Test cube for view control testing
 const testCubeGeometry = new THREE.BoxGeometry(20, 20, 20);
@@ -190,7 +218,7 @@ function loadMesh(path) {
       loadedMesh.scale.set(1000, 1000, 1000);
 
       // Rotate from Y-up (glTF) to Z-up (scene)
-      loadedMesh.rotation.x = -Math.PI / 2;
+      loadedMesh.rotation.x = Math.PI / 2;
 
       // Apply accent color material and edge lines to all meshes
       const accentMaterial = new THREE.MeshStandardMaterial({
@@ -343,6 +371,11 @@ window.executeCode = executeCode;
 
 // Temporary key listeners for testing
 document.addEventListener('keydown', (e) => {
+  // Ignore key events when typing in input fields
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    return;
+  }
+
   // L key: toggle loading spinner
   if (e.key === 'l' || e.key === 'L') {
     if (loadingOverlay.classList.contains('hidden')) {
