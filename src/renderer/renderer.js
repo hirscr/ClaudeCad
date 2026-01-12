@@ -106,7 +106,7 @@ let currentCode = '';
 // Track current project file path and saved state
 let currentFilePath = null; // Path to currently open .cc file
 let projectName = 'untitled'; // Project name (extracted from chat or file)
-let isSaved = true; // Whether current state has been saved
+let isDirty = false; // Whether current state has unsaved changes
 
 // Undo state (single-level)
 let previousCode = null;
@@ -467,8 +467,9 @@ async function undo() {
   // Update current code
   currentCode = codeToRestore;
 
-  // Mark as unsaved
-  isSaved = false;
+  // Mark as unsaved (dirty)
+  isDirty = true;
+  updateWindowTitle();
 
   // Add system message to chat
   addMessage('assistant', 'Undid last change');
@@ -663,8 +664,71 @@ window.toggleMeasureMode = toggleMeasureMode;
 window.clearMeasurement = clearMeasurement;
 
 // ============================================================
+// WINDOW TITLE MANAGEMENT
+// ============================================================
+
+/**
+ * Update window title to show project name and dirty state
+ */
+function updateWindowTitle() {
+  const dirtyIndicator = isDirty ? '* ' : '';
+  const title = `${dirtyIndicator}${projectName} - ClaudeCAD`;
+  ipcRenderer.send('set-window-title', title);
+}
+
+// Initialize window title
+updateWindowTitle();
+
+// IPC handler: main process asks for dirty state
+ipcRenderer.on('request-dirty-state', () => {
+  ipcRenderer.send('dirty-state-response', isDirty);
+});
+
+// IPC handler: main process requests save before close
+ipcRenderer.on('save-and-close', async () => {
+  await saveProject();
+  // Tell main to proceed with close
+  ipcRenderer.send('proceed-with-close');
+});
+
+// IPC handler: force close without saving
+ipcRenderer.on('force-close', () => {
+  ipcRenderer.send('proceed-with-close');
+});
+
+// ============================================================
 // SAVE/LOAD PROJECT
 // ============================================================
+
+/**
+ * Check if there are unsaved changes and prompt user to save
+ * Returns true if it's safe to proceed (saved, discarded, or no changes)
+ * Returns false if user canceled
+ */
+async function checkUnsavedChanges() {
+  if (!isDirty) {
+    return true; // No unsaved changes, safe to proceed
+  }
+
+  // Show dialog using Electron's dialog (via IPC)
+  const result = await ipcRenderer.invoke('show-unsaved-changes-dialog');
+
+  if (result === 0) {
+    // Save
+    await saveProject();
+    // Check if save succeeded (isDirty will be false if it did)
+    return !isDirty;
+  } else if (result === 1) {
+    // Don't Save
+    return true;
+  } else {
+    // Cancel (result === 2)
+    return false;
+  }
+}
+
+// Expose for future New Project / Load Project features
+window.checkUnsavedChanges = checkUnsavedChanges;
 
 /**
  * Save the current project to a .cc file
@@ -691,11 +755,14 @@ async function saveProject() {
     if (result.success) {
       // Update current file path
       currentFilePath = result.filePath;
-      isSaved = true;
+      isDirty = false;
 
       // Extract project name from file path (remove extension and path)
       const fileName = result.filePath.split(/[\\/]/).pop(); // Get last part of path
       projectName = fileName.replace(/\.cc$/, ''); // Remove .cc extension
+
+      // Update window title
+      updateWindowTitle();
 
       console.log('[Renderer] Project saved successfully to:', result.filePath);
       console.log('[Renderer] Project name:', projectName);
@@ -825,8 +892,12 @@ Object.defineProperty(window, 'projectName', {
   set: (value) => { projectName = value; }
 });
 
-Object.defineProperty(window, 'isSaved', {
-  get: () => isSaved
+Object.defineProperty(window, 'isDirty', {
+  get: () => isDirty,
+  set: (value) => {
+    isDirty = value;
+    updateWindowTitle();
+  }
 });
 
 // Temporary key listeners for testing
@@ -1094,7 +1165,8 @@ function addMessage(role, content, options = {}) {
   messageHistory.push(message);
 
   // Mark as unsaved (chat changed)
-  isSaved = false;
+  isDirty = true;
+  updateWindowTitle();
 
   // Create message element
   const messageEl = document.createElement('div');
@@ -1258,7 +1330,8 @@ async function sendChatMessage() {
       currentCode = result.code;
 
       // Mark as unsaved (code changed)
-      isSaved = false;
+      isDirty = true;
+      updateWindowTitle();
 
       // Add assistant message
       addMessage('assistant', result.explanation);

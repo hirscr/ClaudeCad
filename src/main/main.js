@@ -6,6 +6,9 @@ const claudeManager = require('./claude-manager');
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 
+let mainWindow = null;
+let isQuitting = false;
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
@@ -19,6 +22,24 @@ function createWindow() {
     }
   });
 
+  mainWindow = win;
+
+  // Intercept window close event
+  win.on('close', (event) => {
+    // Allow close if we're already in the process of quitting
+    if (isQuitting) {
+      return;
+    }
+
+    if (!win.isDestroyed() && win.webContents) {
+      // Prevent default close
+      event.preventDefault();
+
+      // Check if dirty via IPC
+      checkDirtyAndClose(win);
+    }
+  });
+
   if (isDev) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
@@ -26,7 +47,90 @@ function createWindow() {
   }
 }
 
+/**
+ * Check if renderer has unsaved changes and show dialog if needed
+ */
+function checkDirtyAndClose(win) {
+  // Request dirty state from renderer
+  win.webContents.send('request-dirty-state');
+
+  // Listen for response (one-time)
+  ipcMain.once('dirty-state-response', (event, isDirty) => {
+    if (isDirty) {
+      // Show confirmation dialog
+      const choice = dialog.showMessageBoxSync(win, {
+        type: 'warning',
+        buttons: ['Save', 'Don\'t Save', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        title: 'Unsaved Changes',
+        message: 'You have unsaved changes. Save before closing?',
+        detail: 'Your changes will be lost if you don\'t save them.'
+      });
+
+      if (choice === 0) {
+        // Save
+        console.log('[Main] User chose to save before closing');
+
+        // Listen for save completion or close signal
+        ipcMain.once('proceed-with-close', () => {
+          // Mark as quitting and destroy window
+          isQuitting = true;
+          if (!win.isDestroyed()) {
+            win.destroy();
+          }
+        });
+
+        // Request save from renderer
+        win.webContents.send('save-and-close');
+      } else if (choice === 1) {
+        // Don't Save
+        console.log('[Main] User chose not to save, closing');
+
+        // Mark as quitting and destroy window
+        isQuitting = true;
+        if (!win.isDestroyed()) {
+          win.destroy();
+        }
+      } else {
+        // Cancel (choice === 2 or dialog was closed)
+        console.log('[Main] User canceled close operation');
+        // Do nothing - window stays open
+      }
+    } else {
+      // Not dirty - close immediately
+      console.log('[Main] No unsaved changes, closing');
+      isQuitting = true;
+      if (!win.isDestroyed()) {
+        win.destroy();
+      }
+    }
+  });
+}
+
 // IPC Handlers
+
+// Set window title from renderer
+ipcMain.on('set-window-title', (event, title) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setTitle(title);
+  }
+});
+
+// Show unsaved changes dialog (for New Project / Load Project)
+ipcMain.handle('show-unsaved-changes-dialog', async () => {
+  const choice = dialog.showMessageBoxSync(mainWindow, {
+    type: 'warning',
+    buttons: ['Save', 'Don\'t Save', 'Cancel'],
+    defaultId: 0,
+    cancelId: 2,
+    title: 'Unsaved Changes',
+    message: 'You have unsaved changes. Save before continuing?',
+    detail: 'Your changes will be lost if you don\'t save them.'
+  });
+  return choice;
+});
+
 ipcMain.handle('execute-code', async (event, code) => {
   try {
     console.log('[Main] Received execute-code request');
@@ -283,6 +387,14 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+});
+
+app.on('before-quit', (event) => {
+  // On macOS Cmd+Q, check for unsaved changes before quitting
+  if (!isQuitting && mainWindow && !mainWindow.isDestroyed()) {
+    event.preventDefault();
+    checkDirtyAndClose(mainWindow);
+  }
 });
 
 app.on('window-all-closed', () => {

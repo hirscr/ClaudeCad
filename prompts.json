@@ -20,7 +20,7 @@
   {
     "id": "p5-04",
     "title": "Export STL",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 4: Export STL\n\n## CONTEXT\nUsers need to export models for 3D printing.\n\n## REQUIREMENTS\n1. Add Export STL menu option or keyboard shortcut (Cmd+E)\n2. Show native save dialog with .stl filter\n3. Call Python subprocess to export STL\n4. Use binary STL format (smaller, standard)\n5. Handle export errors gracefully\n6. Show success/failure in status bar\n\n## NOTES\n- Python already has export capability via cad_engine.py\n- May need new IPC channel: 'export-stl'\n- Export current model code, write STL to user-chosen path\n- Build123d: export_stl(part.part, \"output.stl\")\n\n## EXPECTED RESULT\n1. Create a model\n2. Press Cmd+E (or menu)\n3. Save dialog appears with .stl filter\n4. Choose location, save\n5. STL file opens in slicer software correctly\n\nProvide a plan before implementing code."
   },
   {
