@@ -231,6 +231,10 @@ document.getElementById('export-stl-button').addEventListener('click', () => {
   exportSTL();
 });
 
+document.getElementById('fit-view-button').addEventListener('click', () => {
+  fitToView();
+});
+
 // Handle render mode buttons
 document.getElementById('solid-button').addEventListener('click', () => {
   setRenderMode('solid');
@@ -761,6 +765,19 @@ function fitCameraToObject(object, direction = viewPresets.isometric) {
   controls.update();
 }
 
+/**
+ * Fit camera to view entire model (uses isometric view)
+ */
+function fitToView() {
+  const target = currentMesh || testCube;
+  if (target) {
+    fitCameraToObject(target, viewPresets.isometric);
+    console.log('[View] Fit to view - camera repositioned');
+  } else {
+    console.log('[View] No mesh to fit to view');
+  }
+}
+
 // Execute Build123d code via IPC
 async function executeCode(code) {
   try {
@@ -929,6 +946,7 @@ async function redo() {
 // Expose undo/redo functions for debugging
 window.undo = undo;
 window.redo = redo;
+window.fitToView = fitToView;
 
 // ============================================================
 // AXES TOGGLE
@@ -1776,6 +1794,11 @@ document.addEventListener('keydown', (e) => {
   // A key: toggle axes
   if (e.key === 'a' || e.key === 'A') {
     toggleAxes();
+  }
+
+  // F key: fit to view
+  if (e.key === 'f' || e.key === 'F') {
+    fitToView();
   }
 
   // M key: toggle measure mode
