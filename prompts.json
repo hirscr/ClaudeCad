@@ -14,13 +14,13 @@
   {
     "id": "p6-03",
     "title": "Pulsing Red Model During Processing",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 3: Pulsing Red Model During Processing\n\n## CONTEXT\nReplace the spinner overlay with a more elegant visual: the model pulses red while Claude is thinking.\n\n## REQUIREMENTS\n1. Remove/hide the spinner overlay during Claude exchanges\n2. When processing starts ('claude' phase):\n   - Dim the model to a dark red color\n   - Animate pulsing: smoothly oscillate between dim red and lighter red\n   - Use requestAnimationFrame for smooth animation\n3. When processing ends:\n   - Stop animation\n   - Restore original model color(s)\n4. If no model exists yet, fall back to status bar indicator only\n\n## ANIMATION DETAILS\n- Base color: dim red (~#661111 or similar)\n- Pulse to: lighter red (~#aa3333)\n- Pulse speed: ~1-2 second cycle\n- Smooth sine wave interpolation\n\n## IMPLEMENTATION NOTES\n- Store original material colors before starting\n- Create animation loop that modifies material.color\n- Clean up animation on stop\n- Handle multi-mesh models (traverse and animate all)\n\n## FILES TO MODIFY\n- src/renderer/renderer.js (animation logic, modify setProcessing)\n- src/renderer/styles.css (hide spinner if needed)\n\n## EXPECTED RESULT\n1. npm start, create a model\n2. Send a new message to Claude\n3. Model turns red and pulses smoothly\n4. When response arrives, model returns to normal color\n5. No spinner visible during this process\n\nProvide a plan before implementing code."
   },
   {
     "id": "p6-04",
     "title": "Disable Actions During Processing",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 4: Disable Actions During Processing\n\n## CONTEXT\nWhile Claude is processing, destructive actions should be disabled but view controls should remain active.\n\n## ACTIONS TO DISABLE DURING PROCESSING\n- Save (Cmd+S)\n- Save As\n- Load/Open (Cmd+O)\n- Export STL (Cmd+E)\n- Undo (Cmd+Z)\n- Redo (Cmd+Shift+Z)\n- Clear Project (Cmd+Shift+K)\n- Refresh Context\n- New Project\n\n## ACTIONS TO KEEP ENABLED\n- Camera orbit/pan/zoom (TrackballControls)\n- View presets dropdown (Front, Top, Isometric, etc.)\n- Measure tool (M key and button)\n- Grid toggle (when implemented)\n- Axes toggle (when implemented)\n- Escape key (clear selection/measurement)\n\n## IMPLEMENTATION\n1. Add `isProcessing` check to each disabled action\n2. Show brief status message if user tries disabled action: \"Please wait...\"\n3. Disable toolbar buttons visually (greyed out)\n4. Menu items should also be disabled (via IPC to main process)\n\n## FILES TO MODIFY\n- src/renderer/renderer.js (add isProcessing checks)\n- src/main/main.js (menu enable/disable via IPC)\n\n## EXPECTED RESULT\n1. Send a message to Claude\n2. While pulsing red, try Cmd+S -> \"Please wait...\" in status\n3. Camera controls still work (can orbit the pulsing model)\n4. Measure tool still works\n5. When processing ends, all actions re-enabled\n\nProvide a plan before implementing code."
   },
   {

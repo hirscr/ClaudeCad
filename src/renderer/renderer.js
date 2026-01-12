@@ -443,25 +443,40 @@ function loadMesh(path) {
       // Rotate from Y-up (glTF) to Z-up (scene)
       loadedMesh.rotation.x = Math.PI / 2;
 
-      // Apply accent color material and edge lines to all meshes
-      const accentMaterial = new THREE.MeshStandardMaterial({
-        color: 0x4a9eff,
-        side: THREE.DoubleSide
-      });
+      // Apply material and edge lines to all meshes
+      // Preserve source colors if present, otherwise apply accent blue
       const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6ab0ff });
       let meshCount = 0;
+      let preservedCount = 0;
+      const defaultGrey = new THREE.Color(0x808080);
+
       loadedMesh.traverse((child) => {
         if (child.isMesh) {
           meshCount++;
-          // Dispose old material
-          if (child.material) {
-            if (Array.isArray(child.material)) {
-              child.material.forEach(mat => mat.dispose());
-            } else {
-              child.material.dispose();
+
+          // Check if material has a meaningful color (not default grey)
+          const hasSourceColor = child.material &&
+            child.material.color &&
+            !child.material.color.equals(defaultGrey);
+
+          if (hasSourceColor) {
+            // Preserve source color, just ensure DoubleSide
+            child.material.side = THREE.DoubleSide;
+            preservedCount++;
+          } else {
+            // Dispose old material and apply default accent color
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach(mat => mat.dispose());
+              } else {
+                child.material.dispose();
+              }
             }
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0x4a9eff,
+              side: THREE.DoubleSide
+            });
           }
-          child.material = accentMaterial;
 
           // Add edge lines
           const edges = new THREE.EdgesGeometry(child.geometry);
@@ -469,7 +484,7 @@ function loadMesh(path) {
           child.add(edgeLines);
         }
       });
-      console.log(`Applied DoubleSide material and edges to ${meshCount} mesh(es)`);
+      console.log(`Processed ${meshCount} mesh(es): preserved ${preservedCount} color(s), applied accent to ${meshCount - preservedCount}`);
 
       // Remove test cube on first successful load
       const isFirstLoad = testCube !== null;
