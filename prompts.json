@@ -2,7 +2,7 @@
   {
     "id": "p4-01",
     "title": "Raycaster for Click Detection",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 1: Raycaster for Click Detection\n\n## CONTEXT\nPhase 4: Selection & Measure. Need to detect when user clicks on the 3D model.\n\n## REQUIREMENTS\n1. Set up Three.js Raycaster in renderer.js\n2. On mouse click in viewport, cast ray from camera through mouse position\n3. Detect intersection with current mesh\n4. If hit, log the intersection point (x, y, z) to console\n5. Ignore clicks when no mesh loaded\n6. Ignore clicks on grid/axes (only detect mesh)\n\n## NOTES\n- Use Raycaster and mouse position normalized to (-1, 1)\n- Only respond to left-click\n- Don't interfere with OrbitControls drag\n\n## EXPECTED RESULT\n1. npm start\n2. Generate a model\n3. Click on model surface\n4. Console logs intersection coordinates\n\nProvide a plan before implementing code."
   },
   {

@@ -98,6 +98,9 @@ let currentCode = '';
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
+// Store last click information
+let lastClickInfo = null;
+
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
@@ -800,6 +803,11 @@ Object.defineProperty(window, 'currentCode', {
   set: (value) => { currentCode = value; }
 });
 
+// Expose lastClickInfo for debugging
+Object.defineProperty(window, 'lastClickInfo', {
+  get: () => lastClickInfo
+});
+
 // ============================================================
 // RAYCASTER CLICK DETECTION
 // ============================================================
@@ -829,7 +837,13 @@ renderer.domElement.addEventListener('click', (event) => {
 
   // Filter to only include intersections with the current mesh
   // (Exclude grid, axes, labels, test cube, lights)
+  // Also filter out LineSegments (edge lines) which don't have faces
   const meshIntersects = intersects.filter(intersect => {
+    // Skip non-mesh objects (LineSegments, etc.)
+    if (!intersect.object.isMesh) {
+      return false;
+    }
+
     // Walk up the parent chain to see if this object belongs to currentMesh
     let obj = intersect.object;
     while (obj) {
@@ -841,12 +855,53 @@ renderer.domElement.addEventListener('click', (event) => {
     return false;
   });
 
-  // Log intersection point if found
+  // Log intersection point and normal if found
   if (meshIntersects.length > 0) {
     const firstHit = meshIntersects[0];
     const point = firstHit.point;
 
-    console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
+    // Get face normal if available
+    if (firstHit.face && firstHit.face.normal) {
+      // Clone the local face normal
+      const localNormal = firstHit.face.normal.clone();
+
+      // Transform to world space using the object's rotation matrix
+      const worldNormal = localNormal.transformDirection(firstHit.object.matrixWorld);
+
+      // Normalize to ensure it's a unit vector
+      worldNormal.normalize();
+
+      // Store last click info
+      lastClickInfo = {
+        position: {
+          x: point.x,
+          y: point.y,
+          z: point.z
+        },
+        normal: {
+          x: worldNormal.x,
+          y: worldNormal.y,
+          z: worldNormal.z
+        }
+      };
+
+      // Log with formatted output
+      console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
+      console.log(`[Raycaster] Normal: (${worldNormal.x.toFixed(3)}, ${worldNormal.y.toFixed(3)}, ${worldNormal.z.toFixed(3)})`);
+    } else {
+      // No face normal available (shouldn't happen with filtered meshes, but handle it)
+      lastClickInfo = {
+        position: {
+          x: point.x,
+          y: point.y,
+          z: point.z
+        },
+        normal: null
+      };
+
+      console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
+      console.log(`[Raycaster] Warning: No face normal available`);
+    }
   }
 });
 
