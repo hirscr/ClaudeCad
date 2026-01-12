@@ -9,6 +9,7 @@ import json
 import tempfile
 import traceback
 import os
+import re
 from pathlib import Path
 
 try:
@@ -55,7 +56,41 @@ def execute_build123d(code):
     if 'part' not in namespace:
         raise ValueError("No 'part' variable found in code. Please assign your geometry to a variable named 'part'.")
 
-    return namespace['part']
+    return namespace['part'], namespace
+
+
+def extract_colors(code):
+    """
+    Extract color assignments from Build123d code.
+    Returns a dictionary mapping feature names to colors.
+
+    Example:
+        base.color = Color("blue") -> {"base": "#0000ff"}
+        hole.color = Color(1, 0, 0) -> {"hole": "#ff0000"}
+    """
+    colors = {}
+
+    # Pattern: variable_name.color = Color("color_name")
+    named_pattern = r'(\w+)\.color\s*=\s*Color\s*\(\s*["\'](\w+)["\']\s*\)'
+    for match in re.finditer(named_pattern, code):
+        var_name = match.group(1)
+        color_name = match.group(2).lower()
+        colors[var_name] = color_name
+
+    # Pattern: variable_name.color = Color(r, g, b)
+    rgb_pattern = r'(\w+)\.color\s*=\s*Color\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)'
+    for match in re.finditer(rgb_pattern, code):
+        var_name = match.group(1)
+        r = float(match.group(2))
+        g = float(match.group(3))
+        b = float(match.group(4))
+        # Convert to hex
+        hex_color = '#{:02x}{:02x}{:02x}'.format(
+            int(r * 255), int(g * 255), int(b * 255)
+        )
+        colors[var_name] = hex_color
+
+    return colors
 
 
 def export_mesh(part):
@@ -92,7 +127,7 @@ def handle_export_stl(code, output_path):
     """
     try:
         # Execute the code
-        part = execute_build123d(code)
+        part, namespace = execute_build123d(code)
 
         # Export to binary STL (part.part is the actual geometry)
         export_stl(part.part, output_path)
@@ -133,24 +168,29 @@ def main():
             return
 
         # Execute the code
-        part = execute_build123d(code)
+        part, namespace = execute_build123d(code)
 
         # Check if geometry is empty (e.g., user said "delete everything")
         if part.part is None:
             print(json.dumps({
                 "success": True,
                 "empty": True,
-                "mesh_path": None
+                "mesh_path": None,
+                "colors": {}
             }))
             return
 
         # Export to mesh format (part.part is the actual geometry)
         mesh_path = export_mesh(part.part)
 
+        # Extract color information from code
+        colors = extract_colors(code)
+
         # Success response
         print(json.dumps({
             "success": True,
-            "mesh_path": mesh_path
+            "mesh_path": mesh_path,
+            "colors": colors
         }))
 
     except SyntaxError as e:

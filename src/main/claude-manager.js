@@ -120,6 +120,16 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
   prompt += '- DO NOT include any export line - handled automatically\n';
   prompt += '- Use any valid Build123d operations\n\n';
 
+  // Color support
+  prompt += '# Color Support\n\n';
+  prompt += 'You can assign colors to shapes using the Color class:\n';
+  prompt += '```\n';
+  prompt += 'part.color = Color("blue")  # Named colors: red, blue, green, yellow, etc.\n';
+  prompt += 'part.color = Color(1, 0, 0)  # RGB values (0-1): red\n';
+  prompt += '```\n';
+  prompt += 'Colors help differentiate features visually in multi-feature models.\n';
+  prompt += 'Use colors when creating complex models with multiple distinct parts.\n\n';
+
   // Limitations
   prompt += '# Limitations\n\n';
   prompt += '- Only uniform scaling is supported (no stretched/squashed shapes like ellipsoids)\n';
