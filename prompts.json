@@ -62,13 +62,13 @@
   {
     "id": "p6-11",
     "title": "Save/Load Feature Colors",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 11: Save/Load Feature Colors\n\n## CONTEXT\nFeature color overrides need to persist with the project file.\n\n## PROJECT FILE UPDATE\nAdd `featureColors` to .cc file format:\n```json\n{\n  \"version\": \"1.0\",\n  \"name\": \"my-model\",\n  \"code\": \"...\",\n  \"chat\": [...],\n  \"featureColors\": {\n    \"0\": 16711680,\n    \"2\": 16753920\n  }\n}\n```\n\n## SAVE\n1. Include featureColors map in project JSON\n2. Keys are feature indices (as strings for JSON)\n3. Values are hex color integers\n\n## LOAD\n1. Parse featureColors from project file\n2. After model loads, apply color overrides:\n```javascript\nif (projectData.featureColors) {\n  currentMesh.traverse((child) => {\n    if (child.isMesh && child.userData.featureIndex !== undefined) {\n      const colorOverride = projectData.featureColors[child.userData.featureIndex];\n      if (colorOverride !== undefined) {\n        child.material.color.setHex(colorOverride);\n      }\n    }\n  });\n}\n```\n\n## FILES TO MODIFY\n- src/renderer/renderer.js (save/load logic)\n- src/main/main.js (if save/load handlers need update)\n\n## EXPECTED RESULT\n1. Create model, change some feature colors\n2. Save project\n3. Close and reopen\n4. Load project\n5. Feature colors are restored\n\nProvide a plan before implementing code."
   },
   {
     "id": "p6-12",
     "title": "Grid Toggle",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 12: Grid Toggle\n\n## CONTEXT\nUsers should be able to show/hide the XY grid.\n\n## REQUIREMENTS\n1. Add Grid toggle button to toolbar (icon: grid pattern)\n2. Default: grid visible\n3. Click toggles visibility\n4. Button shows active state when grid is visible\n5. Optional: keyboard shortcut (G key)\n\n## IMPLEMENTATION\n```javascript\n// Grid is already created as gridHelper\nlet gridVisible = true;\n\nfunction toggleGrid() {\n  gridVisible = !gridVisible;\n  gridHelper.visible = gridVisible;\n  // Update button state\n  document.getElementById('grid-button').classList.toggle('active', gridVisible);\n}\n```\n\n## FILES TO MODIFY\n- src/renderer/index.html (add button)\n- src/renderer/renderer.js (toggle logic)\n- src/renderer/styles.css (button styling if needed)\n\n## EXPECTED RESULT\n1. npm start\n2. Grid visible by default, button shows active\n3. Click Grid button -> grid disappears, button inactive\n4. Click again -> grid reappears\n\nProvide a plan before implementing code."
   },
   {

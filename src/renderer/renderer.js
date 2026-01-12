@@ -148,6 +148,9 @@ let measureVisuals = {
   line: null
 };
 
+// Axes visibility state
+let axesVisible = true;
+
 // Pulse animation state (for red pulsing during Claude processing)
 let pulseAnimationId = null;
 let originalColors = new Map(); // Map<material, {color: Color, emissive: Color}>
@@ -207,6 +210,10 @@ document.getElementById('undo-button').addEventListener('click', () => {
 
 document.getElementById('redo-button').addEventListener('click', () => {
   redo();
+});
+
+document.getElementById('axes-button').addEventListener('click', () => {
+  toggleAxes();
 });
 
 document.getElementById('measure-button').addEventListener('click', () => {
@@ -903,6 +910,29 @@ async function redo() {
 // Expose undo/redo functions for debugging
 window.undo = undo;
 window.redo = redo;
+
+// ============================================================
+// AXES TOGGLE
+// ============================================================
+
+/**
+ * Toggle axes and labels visibility
+ */
+function toggleAxes() {
+  axesVisible = !axesVisible;
+  axesHelper.visible = axesVisible;
+  labelX.visible = axesVisible;
+  labelY.visible = axesVisible;
+  labelZ.visible = axesVisible;
+
+  const axesButton = document.getElementById('axes-button');
+  axesButton.classList.toggle('active', axesVisible);
+
+  console.log(`[Axes] Visibility toggled: ${axesVisible ? 'visible' : 'hidden'}`);
+}
+
+// Expose for debugging
+window.toggleAxes = toggleAxes;
 
 // ============================================================
 // MEASURE TOOL
@@ -1664,6 +1694,11 @@ document.addEventListener('keydown', (e) => {
       statusText.textContent = 'Ready';
       statusText.style.color = '#888888';
     }
+  }
+
+  // A key: toggle axes
+  if (e.key === 'a' || e.key === 'A') {
+    toggleAxes();
   }
 
   // M key: toggle measure mode
