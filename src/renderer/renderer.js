@@ -399,6 +399,11 @@ function loadMesh(path) {
     hoveredMesh = null;
   }
 
+  // Deselect feature and hide color palette
+  if (selectedFeature) {
+    deselectFeature();
+  }
+
   // Clear any active measurements when loading new mesh
   if (measurePointA || measurePointB) {
     clearMeasurement();
@@ -562,6 +567,11 @@ function clearViewport() {
   if (hoveredMesh) {
     removeHighlight(hoveredMesh);
     hoveredMesh = null;
+  }
+
+  // Deselect feature and hide color palette
+  if (selectedFeature) {
+    deselectFeature();
   }
 
   // Clear any active measurements
@@ -941,6 +951,11 @@ function toggleMeasureMode() {
   const measureButton = document.getElementById('measure-button');
   const measureDistance = document.getElementById('measure-distance');
   if (measureMode) {
+    // Hide color palette when entering measure mode
+    if (selectedFeature) {
+      deselectFeature();
+    }
+
     measureButton.classList.add('active');
     statusText.textContent = 'Measure mode: Click first point';
     statusText.style.color = '#4a9eff';
@@ -1577,6 +1592,11 @@ document.addEventListener('keydown', (e) => {
 
   // Escape key: clear various states
   if (e.key === 'Escape') {
+    // Deselect feature and hide color palette
+    if (selectedFeature) {
+      deselectFeature();
+    }
+
     // Clear click marker if present
     if (clickMarker) {
       clearClickMarker();
@@ -2090,6 +2110,12 @@ Object.defineProperty(window, 'selectedFeature', {
   get: () => selectedFeature
 });
 
+// Expose color palette functions for debugging
+window.showColorPalette = showColorPalette;
+window.hideColorPalette = hideColorPalette;
+window.applyColorToFeature = applyColorToFeature;
+window.deselectFeature = deselectFeature;
+
 // ============================================================
 // HOVER HIGHLIGHT SYSTEM
 // ============================================================
@@ -2240,6 +2266,111 @@ renderer.domElement.addEventListener('mouseleave', () => {
 });
 
 // ============================================================
+// COLOR PALETTE
+// ============================================================
+
+// Get color palette elements
+const colorPalette = document.getElementById('color-palette');
+const colorSwatches = document.querySelectorAll('.color-swatch');
+
+/**
+ * Initialize color swatches with their background colors
+ */
+function initializeColorPalette() {
+  colorSwatches.forEach(swatch => {
+    const color = swatch.getAttribute('data-color');
+    swatch.style.backgroundColor = color;
+  });
+}
+
+// Initialize palette on load
+initializeColorPalette();
+
+/**
+ * Show color palette when a feature is selected
+ */
+function showColorPalette() {
+  if (!selectedFeature) return;
+
+  colorPalette.classList.remove('hidden');
+
+  // Update active state to show current color
+  updateActiveColorSwatch();
+}
+
+/**
+ * Hide color palette
+ */
+function hideColorPalette() {
+  colorPalette.classList.add('hidden');
+
+  // Clear active states
+  colorSwatches.forEach(swatch => {
+    swatch.classList.remove('active');
+  });
+}
+
+/**
+ * Update active color swatch based on selected feature's current color
+ */
+function updateActiveColorSwatch() {
+  if (!selectedFeature || !selectedFeature.material) return;
+
+  const currentColor = selectedFeature.material.color;
+
+  // Find matching swatch
+  colorSwatches.forEach(swatch => {
+    const swatchColor = new THREE.Color(swatch.getAttribute('data-color'));
+
+    // Compare colors (with small tolerance for floating point)
+    if (currentColor.equals(swatchColor)) {
+      swatch.classList.add('active');
+    } else {
+      swatch.classList.remove('active');
+    }
+  });
+}
+
+/**
+ * Apply color to selected feature
+ */
+function applyColorToFeature(colorHex) {
+  if (!selectedFeature || !selectedFeature.material) {
+    console.warn('[ColorPalette] No feature selected or no material');
+    return;
+  }
+
+  const newColor = new THREE.Color(colorHex);
+  selectedFeature.material.color.copy(newColor);
+
+  console.log(`[ColorPalette] Applied color ${colorHex} to feature ${selectedFeature.userData.featureIndex}`);
+
+  // Update active swatch
+  updateActiveColorSwatch();
+
+  // Mark project as dirty
+  isDirty = true;
+  updateWindowTitle();
+}
+
+/**
+ * Deselect current feature
+ */
+function deselectFeature() {
+  selectedFeature = null;
+  hideColorPalette();
+}
+
+// Add click handlers to color swatches
+colorSwatches.forEach(swatch => {
+  swatch.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent viewport click
+    const color = swatch.getAttribute('data-color');
+    applyColorToFeature(color);
+  });
+});
+
+// ============================================================
 // RAYCASTER CLICK DETECTION
 // ============================================================
 
@@ -2304,6 +2435,9 @@ renderer.domElement.addEventListener('click', (event) => {
     const featureIdx = hitMesh.userData.featureIndex;
     console.log(`[Selection] Feature ${featureIdx} selected`);
 
+    // Show color palette
+    showColorPalette();
+
     // Get face normal if available
     if (firstHit.face && firstHit.face.normal) {
       // Clone the local face normal
@@ -2355,6 +2489,12 @@ renderer.domElement.addEventListener('click', (event) => {
 
       console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
       console.log(`[Raycaster] Warning: No face normal available`);
+    }
+  } else {
+    // Clicked on empty space (not on mesh) - deselect feature
+    if (selectedFeature) {
+      console.log('[Selection] Deselected feature (clicked empty space)');
+      deselectFeature();
     }
   }
 });

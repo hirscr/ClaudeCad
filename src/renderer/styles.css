@@ -401,3 +401,46 @@ canvas {
   display: none;
 }
 
+/* Color Palette */
+.color-palette {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #2a2d2e;
+  border: 1px solid #3c3c3c;
+  border-radius: 3px;
+  transition: opacity 0.2s ease;
+}
+
+.color-palette.hidden {
+  display: none;
+}
+
+.color-palette-label {
+  font-size: 11px;
+  color: #888888;
+  margin-right: 4px;
+  user-select: none;
+}
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #3c3c3c;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.color-swatch:hover {
+  border-color: #ffffff;
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  border-color: #4a9eff;
+  border-width: 3px;
+  transform: scale(1.05);
+}
+

@@ -44,7 +44,7 @@
   {
     "id": "p6-08",
     "title": "Per-Feature Hover Highlight",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 8: Per-Feature Hover Highlight\n\n## CONTEXT\nWhen hovering over a feature, highlight just that feature (not the whole model) with a lighter shade of its current color.\n\n## CURRENT BEHAVIOR\nHover highlights the entire model with blue emissive glow.\n\n## REQUIRED BEHAVIOR\n1. Hover highlights only the specific mesh under cursor\n2. Highlight effect: lighten the current color (not blue glow)\n3. Store original color, restore on mouse leave\n4. Throttled at 30fps (already implemented)\n\n## HIGHLIGHT EFFECT\n```javascript\nfunction lightenColor(color, amount = 0.3) {\n  const hsl = {};\n  color.getHSL(hsl);\n  hsl.l = Math.min(1, hsl.l + amount);\n  return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);\n}\n\nfunction applyFeatureHighlight(mesh) {\n  mesh.userData.originalColor = mesh.material.color.clone();\n  mesh.material.color.copy(lightenColor(mesh.userData.originalColor));\n}\n\nfunction removeFeatureHighlight(mesh) {\n  if (mesh.userData.originalColor) {\n    mesh.material.color.copy(mesh.userData.originalColor);\n    delete mesh.userData.originalColor;\n  }\n}\n```\n\n## FILES TO MODIFY\n- src/renderer/renderer.js (update hover system)\n\n## EXPECTED RESULT\n1. Load multi-body model with different colored features\n2. Hover over one feature -> only that feature lightens\n3. Move to another feature -> first returns to normal, second lightens\n4. Move off model -> all normal colors\n\nProvide a plan before implementing code."
   },
   {
