@@ -35,6 +35,15 @@ controls.zoomSpeed = 1.2;
 controls.panSpeed = 0.8;
 controls.dynamicDampingFactor = 0.1;
 
+// Track drag state for hover highlighting
+controls.addEventListener('start', () => {
+  isDragging = true;
+});
+
+controls.addEventListener('end', () => {
+  isDragging = false;
+});
+
 // Grid on XY plane (Z-up)
 const gridHelper = new THREE.GridHelper(100, 10, 0x3c3c3c, 0x3c3c3c);
 gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane for Z-up
@@ -94,12 +103,19 @@ let currentMesh = null;
 // Track current Build123d code (for iterative editing)
 let currentCode = '';
 
-// Raycaster for click detection
+// Raycaster for click detection and hover
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 // Store last click information
 let lastClickInfo = null;
+
+// Hover state tracking
+let hoveredMesh = null;
+let originalMaterial = null;
+let isDragging = false;
+let lastHoverCheck = 0;
+const hoverCheckInterval = 33; // ~30fps (33ms)
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -191,6 +207,12 @@ function hideLoading() {
 // Load glTF mesh from file path
 function loadMesh(path) {
   setProcessing('python');
+
+  // Clear hover state when loading new mesh
+  if (hoveredMesh) {
+    removeHighlight(hoveredMesh);
+    hoveredMesh = null;
+  }
 
   // Remove previous mesh if exists
   if (currentMesh) {
@@ -827,6 +849,131 @@ Object.defineProperty(window, 'currentCode', {
 // Expose lastClickInfo for debugging
 Object.defineProperty(window, 'lastClickInfo', {
   get: () => lastClickInfo
+});
+
+// ============================================================
+// HOVER HIGHLIGHT SYSTEM
+// ============================================================
+
+/**
+ * Apply highlight effect to a mesh
+ */
+function applyHighlight(mesh) {
+  // Store original material properties if not already stored
+  if (!originalMaterial && mesh.material) {
+    originalMaterial = {
+      emissive: mesh.material.emissive.clone(),
+      emissiveIntensity: mesh.material.emissiveIntensity
+    };
+  }
+
+  // Apply subtle blue emissive glow (accent color)
+  if (mesh.material) {
+    mesh.material.emissive.setHex(0x4a9eff);
+    mesh.material.emissiveIntensity = 0.3;
+  }
+}
+
+/**
+ * Remove highlight effect from a mesh
+ */
+function removeHighlight(mesh) {
+  // Restore original material properties
+  if (originalMaterial && mesh.material) {
+    mesh.material.emissive.copy(originalMaterial.emissive);
+    mesh.material.emissiveIntensity = originalMaterial.emissiveIntensity;
+    originalMaterial = null;
+  }
+}
+
+/**
+ * Check for hover intersection and apply/remove highlight
+ */
+function updateHover() {
+  // Skip if dragging or no mesh loaded
+  if (isDragging || !currentMesh) {
+    return;
+  }
+
+  // Cast ray from camera through mouse position
+  raycaster.setFromCamera(mouse, camera);
+
+  // Check for intersections with scene objects
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  // Filter to only include intersections with the current mesh (not grid, axes, etc.)
+  const meshIntersects = intersects.filter(intersect => {
+    if (!intersect.object.isMesh) {
+      return false;
+    }
+
+    // Walk up the parent chain to see if this belongs to currentMesh
+    let obj = intersect.object;
+    while (obj) {
+      if (obj === currentMesh) {
+        return true;
+      }
+      obj = obj.parent;
+    }
+    return false;
+  });
+
+  // Check if we're hovering over the mesh
+  if (meshIntersects.length > 0) {
+    const firstHit = meshIntersects[0];
+    const hitMesh = firstHit.object;
+
+    // If this is a new hover target, update highlight
+    if (hoveredMesh !== hitMesh) {
+      // Remove highlight from previous mesh
+      if (hoveredMesh) {
+        removeHighlight(hoveredMesh);
+      }
+
+      // Apply highlight to new mesh
+      hoveredMesh = hitMesh;
+      applyHighlight(hoveredMesh);
+    }
+  } else {
+    // No intersection - remove highlight if present
+    if (hoveredMesh) {
+      removeHighlight(hoveredMesh);
+      hoveredMesh = null;
+    }
+  }
+}
+
+/**
+ * Throttled mousemove handler for hover detection
+ */
+renderer.domElement.addEventListener('mousemove', (event) => {
+  // Throttle to ~30fps
+  const now = performance.now();
+  if (now - lastHoverCheck < hoverCheckInterval) {
+    return;
+  }
+  lastHoverCheck = now;
+
+  // Get canvas bounding rectangle
+  const canvas = renderer.domElement;
+  const rect = canvas.getBoundingClientRect();
+
+  // Calculate normalized device coordinates (-1 to +1)
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  // Update hover state
+  updateHover();
+});
+
+/**
+ * Remove highlight when mouse leaves the viewport
+ */
+renderer.domElement.addEventListener('mouseleave', () => {
+  if (hoveredMesh) {
+    removeHighlight(hoveredMesh);
+    hoveredMesh = null;
+  }
 });
 
 // ============================================================

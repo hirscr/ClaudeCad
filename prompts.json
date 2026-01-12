@@ -14,13 +14,13 @@
   {
     "id": "p4-03",
     "title": "Inject Click Coordinates into Prompts",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 3: Inject Click Coordinates into Prompts\n\n## CONTEXT\nWhen user clicks then types, Claude should know where they clicked.\n\n## REQUIREMENTS\n1. Store last click info in renderer state\n2. When sending chat message, include click info if recent (within last 30 seconds)\n3. Add to prompt: \"User clicked at position (x, y, z) on surface with normal (nx, ny, nz)\"\n4. Clear click info after it's been used in a prompt\n5. Update claude-manager.js buildPrompt to accept optional click data\n\n## NOTES\n- Click info passed via IPC with chat message\n- Format coordinates to 1 decimal place for readability\n- Only include if user clicked recently before typing\n\n## EXPECTED RESULT\n1. Click on model surface\n2. Type \"fillet this edge\"\n3. Prompt to Claude includes click coordinates\n4. Claude interprets location and modifies appropriately\n\nProvide a plan before implementing code."
   },
   {
     "id": "p4-04",
     "title": "Confirmation Step Before Modification",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 4: Confirmation Step Before Modification\n\n## CONTEXT\nBefore modifying geometry based on click selection, ask user to confirm Claude understood correctly.\n\n## REQUIREMENTS\n1. When Claude responds to a click-based request, show confirmation dialog\n2. Dialog shows: \"Claude wants to: [action description]. Proceed?\"\n3. Extract action description from Claude's explanation\n4. [Yes] button executes the code\n5. [No] button cancels, user can rephrase\n6. Skip confirmation for non-click-based requests\n\n## NOTES\n- Simple modal dialog in renderer\n- Only trigger when click coordinates were included in prompt\n- Keep previous mesh until confirmed\n\n## EXPECTED RESULT\n1. Click on edge, type \"fillet this\"\n2. Dialog: \"Claude wants to: Add 2mm fillet to the selected edge. Proceed?\"\n3. Click Yes -> model updates\n4. Click No -> nothing changes, can retry\n\nProvide a plan before implementing code."
   },
   {
