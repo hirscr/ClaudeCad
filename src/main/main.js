@@ -368,13 +368,14 @@ ipcMain.handle('export-stl', async (event, { code }) => {
 });
 
 // IPC handler for saving project
-ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, currentFilePath }) => {
+ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, currentFilePath, featureColors }) => {
   try {
     console.log('[Main] Received save-project request');
     console.log('[Main] Current file path:', currentFilePath || 'none (new file)');
     console.log('[Main] Project name:', projectName || 'untitled');
     console.log('[Main] Code length:', code?.length || 0);
     console.log('[Main] Chat history length:', chatHistory?.length || 0);
+    console.log('[Main] Feature colors count:', featureColors ? Object.keys(featureColors).length : 0);
 
     let filePath = currentFilePath;
 
@@ -409,7 +410,8 @@ ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, c
       created: now, // For simplicity, using current time (should track this separately in future)
       modified: now,
       code: code || '',
-      chat: chatHistory || []
+      chat: chatHistory || [],
+      featureColors: featureColors || {}
     };
 
     // Write to file

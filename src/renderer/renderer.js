@@ -392,6 +392,39 @@ function stopPulseAnimation() {
   pulseStartTime = null;
 }
 
+/**
+ * Apply saved feature color overrides to the current mesh
+ */
+function applyFeatureColors() {
+  if (!currentMesh) {
+    console.log('[FeatureColors] No mesh to apply colors to');
+    return;
+  }
+
+  if (!featureColors || Object.keys(featureColors).length === 0) {
+    console.log('[FeatureColors] No color overrides to apply');
+    return;
+  }
+
+  console.log('[FeatureColors] Applying color overrides...');
+  let appliedCount = 0;
+
+  currentMesh.traverse((child) => {
+    if (child.isMesh && child.userData.featureIndex !== undefined) {
+      const featureIndex = child.userData.featureIndex;
+      const colorOverride = featureColors[featureIndex];
+
+      if (colorOverride !== undefined) {
+        child.material.color.setHex(colorOverride);
+        appliedCount++;
+        console.log(`[FeatureColors] Applied color 0x${colorOverride.toString(16)} to feature ${featureIndex}`);
+      }
+    }
+  });
+
+  console.log(`[FeatureColors] Applied ${appliedCount} color override(s)`);
+}
+
 // Load glTF mesh from file path
 function loadMesh(path) {
   setProcessing('python');
@@ -525,6 +558,9 @@ function loadMesh(path) {
       // Add mesh to scene
       scene.add(loadedMesh);
       currentMesh = loadedMesh;
+
+      // Apply feature color overrides if any
+      applyFeatureColors();
 
       // Only fit camera on first load, preserve user's camera position afterward
       if (isFirstLoad) {
@@ -1032,6 +1068,7 @@ window.toggleMeasureMode = toggleMeasureMode;
 window.clearMeasurement = clearMeasurement;
 window.startPulseAnimation = startPulseAnimation;
 window.stopPulseAnimation = stopPulseAnimation;
+window.applyFeatureColors = applyFeatureColors;
 
 // ============================================================
 // WINDOW TITLE MANAGEMENT
@@ -1214,7 +1251,8 @@ async function saveProject() {
       code: currentCode,
       chatHistory: chatHistoryForSave,
       projectName: projectName,
-      currentFilePath: currentFilePath
+      currentFilePath: currentFilePath,
+      featureColors: featureColors
     });
 
     if (result.success) {
@@ -1394,7 +1432,10 @@ async function loadProject() {
     undoneCode = null; // Clear redo state
     isDirty = false;
     projectJustLoaded = true; // Flag to inject context on next message
-    featureColors = {}; // Reset color overrides (will be restored from save data in future)
+
+    // Restore feature color overrides
+    featureColors = projectData.featureColors || {};
+    console.log('[Renderer] Restored feature colors:', Object.keys(featureColors).length, 'override(s)');
 
     // Update window title
     updateWindowTitle();

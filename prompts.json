@@ -56,7 +56,7 @@
   {
     "id": "p6-10",
     "title": "Apply Color and Log to Chat",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 10: Apply Color and Log to Chat\n\n## CONTEXT\nWhen user selects a color from palette, apply it to the feature and log the change to chat.\n\n## REQUIREMENTS\n1. On color selection:\n   - Apply color to selected feature's material\n   - Add message to chat: \"Color of Feature [N] changed to [color name]\"\n   - Mark project as dirty (unsaved changes)\n2. Color names for chat message:\n   - #000000 -> \"black\"\n   - #ffffff -> \"white\"\n   - #4a9eff -> \"blue\"\n   - #ff4444 -> \"red\"\n   - #ffff00 -> \"yellow\"\n   - #44ff44 -> \"green\"\n   - #00ffff -> \"cyan\"\n   - #ff00ff -> \"magenta\"\n   - #ff9900 -> \"orange\"\n3. Store color overrides for save/load (next task)\n\n## IMPLEMENTATION\n```javascript\nconst colorNames = {\n  0x000000: 'black',\n  0xffffff: 'white',\n  // ...\n};\n\nfunction applyFeatureColor(feature, colorHex) {\n  feature.material.color.setHex(colorHex);\n  \n  const colorName = colorNames[colorHex] || 'custom';\n  const featureNum = feature.userData.featureIndex;\n  \n  // Add to chat as system message (not user/assistant)\n  addMessage('system', `Color of Feature ${featureNum} changed to ${colorName}`);\n  \n  // Mark dirty\n  isDirty = true;\n  updateWindowTitle();\n  \n  // Store override\n  featureColors[featureNum] = colorHex;\n}\n```\n\n## FILES TO MODIFY\n- src/renderer/renderer.js\n\n## EXPECTED RESULT\n1. Select a feature\n2. Pick \"orange\" from palette\n3. Feature turns orange\n4. Chat shows: \"Color of Feature 2 changed to orange\"\n5. Window title shows unsaved indicator (*)\n\nProvide a plan before implementing code."
   },
   {
