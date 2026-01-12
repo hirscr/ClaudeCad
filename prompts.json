@@ -32,7 +32,7 @@
   {
     "id": "p6-06",
     "title": "Export Colors from Build123d",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 6: Export Colors from Build123d\n\n## CONTEXT\nBuild123d needs to export per-feature colors to glTF so renderer can display them.\n\n## RESEARCH NEEDED\n1. Check if Build123d's export_gltf preserves colors\n2. Check how to assign colors to shapes in Build123d\n3. Test with a simple multi-body model\n\n## BUILD123D COLOR ASSIGNMENT\nBuild123d shapes can have colors assigned. Research the API:\n- Part.color property?\n- Compound with colored children?\n- export_gltf options for materials?\n\n## TEST CODE\n```python\nfrom build123d import *\n\n# Create two spheres with different colors\nwith BuildPart() as part:\n    with Locations((0, 0, 0)):\n        Sphere(10)\n    with Locations((25, 0, 0)):\n        Sphere(8)\n\n# How to assign colors?\n# Export and check if colors appear in glTF\n```\n\n## FILES TO MODIFY\n- src/python/cad_engine.py (if export changes needed)\n- System prompt (if Claude needs to know color syntax)\n\n## EXPECTED RESULT\n1. Create multi-body model with colors in Build123d\n2. Export to glTF\n3. Load in Three.js\n4. Each body has its assigned color\n\n## NOTE\nThis may require research. If Build123d doesn't support per-body colors in export, document the limitation and we'll handle colors client-side only.\n\nProvide findings and plan before implementing."
   },
   {

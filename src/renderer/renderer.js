@@ -122,6 +122,9 @@ const mouse = new THREE.Vector2();
 // Store last click information
 let lastClickInfo = null;
 
+// Store reference to selected feature (specific child mesh)
+let selectedFeature = null;
+
 // Click marker visual
 let clickMarker = null;
 let clickMarkerTimeout = null;
@@ -442,6 +445,14 @@ function loadMesh(path) {
 
       // Rotate from Y-up (glTF) to Z-up (scene)
       loadedMesh.rotation.x = Math.PI / 2;
+
+      // Assign feature indices to all child meshes (for click detection)
+      let featureIndex = 0;
+      loadedMesh.traverse((child) => {
+        if (child.isMesh) {
+          child.userData.featureIndex = featureIndex++;
+        }
+      });
 
       // Apply material and edge lines to all meshes
       // Preserve source colors if present, otherwise apply accent blue
@@ -2075,6 +2086,11 @@ Object.defineProperty(window, 'lastClickInfo', {
   get: () => lastClickInfo
 });
 
+// Expose selectedFeature for debugging
+Object.defineProperty(window, 'selectedFeature', {
+  get: () => selectedFeature
+});
+
 // ============================================================
 // HOVER HIGHLIGHT SYSTEM
 // ============================================================
@@ -2251,6 +2267,7 @@ renderer.domElement.addEventListener('click', (event) => {
   if (meshIntersects.length > 0) {
     const firstHit = meshIntersects[0];
     const point = firstHit.point;
+    const hitMesh = firstHit.object;
 
     // If in measure mode, handle measurement
     if (measureMode) {
@@ -2259,6 +2276,11 @@ renderer.domElement.addEventListener('click', (event) => {
     }
 
     // Normal click handling (not in measure mode)
+    // Store selected feature reference
+    selectedFeature = hitMesh;
+    const featureIdx = hitMesh.userData.featureIndex;
+    console.log(`[Selection] Feature ${featureIdx} selected`);
+
     // Get face normal if available
     if (firstHit.face && firstHit.face.normal) {
       // Clone the local face normal
@@ -2270,7 +2292,7 @@ renderer.domElement.addEventListener('click', (event) => {
       // Normalize to ensure it's a unit vector
       worldNormal.normalize();
 
-      // Store last click info with timestamp
+      // Store last click info with timestamp and feature index
       lastClickInfo = {
         position: {
           x: point.x,
@@ -2282,6 +2304,7 @@ renderer.domElement.addEventListener('click', (event) => {
           y: worldNormal.y,
           z: worldNormal.z
         },
+        featureIndex: featureIdx,
         timestamp: Date.now()
       };
 
@@ -2300,6 +2323,7 @@ renderer.domElement.addEventListener('click', (event) => {
           z: point.z
         },
         normal: null,
+        featureIndex: featureIdx,
         timestamp: Date.now()
       };
 
