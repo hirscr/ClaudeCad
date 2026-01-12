@@ -81,6 +81,44 @@ def export_mesh(part):
             raise Exception(f"glTF export failed: {gltf_error}. STL export also failed: {stl_error}")
 
 
+def handle_export_stl(code, output_path):
+    """
+    Export Build123d code to STL file.
+    Args:
+        code: Build123d Python code
+        output_path: Path where STL should be written
+    Returns:
+        JSON response with success/error
+    """
+    try:
+        # Execute the code
+        part = execute_build123d(code)
+
+        # Export to binary STL (part.part is the actual geometry)
+        export_stl(part.part, output_path)
+
+        # Success response
+        print(json.dumps({
+            "success": True,
+            "output_path": output_path
+        }))
+
+    except SyntaxError as e:
+        print(json.dumps({
+            "success": False,
+            "error": f"Syntax error: {e.msg} at line {e.lineno}"
+        }))
+
+    except Exception as e:
+        # Capture full traceback for debugging
+        error_trace = traceback.format_exc()
+        print(json.dumps({
+            "success": False,
+            "error": str(e),
+            "traceback": error_trace
+        }))
+
+
 def main():
     """Main entry point."""
     try:
@@ -123,4 +161,19 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Check for command-line arguments to determine mode
+    if len(sys.argv) > 1 and sys.argv[1] == 'export_stl':
+        # Export STL mode: expect output path as second argument
+        if len(sys.argv) < 3:
+            print(json.dumps({
+                "success": False,
+                "error": "No output path provided for STL export"
+            }))
+            sys.exit(1)
+
+        output_path = sys.argv[2]
+        code = read_stdin()
+        handle_export_stl(code, output_path)
+    else:
+        # Default mode: generate mesh for viewport
+        main()

@@ -98,6 +98,117 @@ ipcMain.handle('send-chat-message', async (event, { message, currentCode, histor
   }
 });
 
+// IPC handler for exporting STL
+ipcMain.handle('export-stl', async (event, { code }) => {
+  try {
+    console.log('[Main] Received export-stl request');
+    console.log('[Main] Code length:', code?.length || 0);
+
+    // Validate code
+    if (!code || !code.trim()) {
+      return {
+        success: false,
+        error: 'No model code to export'
+      };
+    }
+
+    // Show save dialog
+    const result = await dialog.showSaveDialog({
+      title: 'Export STL',
+      defaultPath: 'model.stl',
+      filters: [
+        { name: 'STL Files', extensions: ['stl'] }
+      ],
+      properties: ['createDirectory', 'showOverwriteConfirmation']
+    });
+
+    if (result.canceled) {
+      console.log('[Main] Export dialog canceled');
+      return {
+        success: false,
+        canceled: true
+      };
+    }
+
+    const outputPath = result.filePath;
+    console.log('[Main] User selected export path:', outputPath);
+
+    // Call Python with export_stl mode
+    const { spawn } = require('child_process');
+    const pythonPath = path.join(__dirname, '../../venv/bin/python3');
+    const scriptPath = path.join(__dirname, '../python/cad_engine.py');
+
+    const pythonProcess = spawn(pythonPath, [scriptPath, 'export_stl', outputPath]);
+
+    // Send code via stdin
+    pythonProcess.stdin.write(code);
+    pythonProcess.stdin.write('\n__END__\n');
+    pythonProcess.stdin.end();
+
+    // Collect output
+    let stdout = '';
+    let stderr = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    // Wait for process to complete
+    const exitCode = await new Promise((resolve) => {
+      pythonProcess.on('close', (code) => {
+        resolve(code);
+      });
+    });
+
+    console.log('[Main] Python export process exited with code:', exitCode);
+    if (stderr) {
+      console.log('[Main] Python stderr:', stderr);
+    }
+
+    // Parse result
+    if (exitCode !== 0) {
+      return {
+        success: false,
+        error: `Python process failed with exit code ${exitCode}. ${stderr}`
+      };
+    }
+
+    // Parse JSON response
+    try {
+      const response = JSON.parse(stdout.trim());
+      if (response.success) {
+        console.log('[Main] STL exported successfully to:', outputPath);
+        return {
+          success: true,
+          filePath: outputPath
+        };
+      } else {
+        console.error('[Main] Export failed:', response.error);
+        return {
+          success: false,
+          error: response.error
+        };
+      }
+    } catch (parseError) {
+      console.error('[Main] Failed to parse Python output:', stdout);
+      return {
+        success: false,
+        error: `Failed to parse export result: ${parseError.message}`
+      };
+    }
+  } catch (err) {
+    console.error('[Main] export-stl error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
 // IPC handler for saving project
 ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, currentFilePath }) => {
   try {

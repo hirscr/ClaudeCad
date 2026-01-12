@@ -14,7 +14,7 @@
   {
     "id": "p5-03",
     "title": "Single-Level Undo",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 3: Single-Level Undo\n\n## CONTEXT\nUsers need to undo the last change.\n\n## SPEC REFERENCE\n```javascript\nlet previousCode = null;\n\nfunction saveUndo() {\n  previousCode = currentCode;\n}\n\nfunction undo() {\n  if (previousCode) {\n    currentCode = previousCode;\n    previousCode = null;\n    rebuildModel();\n  }\n}\n```\n\n## REQUIREMENTS\n1. Before each Claude response applies, save current code as previousCode\n2. Add Cmd+Z keyboard shortcut for undo\n3. Undo restores previousCode and rebuilds model\n4. Only one level - after undo, previousCode is null\n5. No redo (user can re-ask Claude)\n6. Undo should work even if last operation failed\n7. Add undo message to chat: \"Undid last change\"\n\n## NOTES\n- Store in renderer state (or main process if needed)\n- Disable undo when previousCode is null\n- Consider adding visual indicator (undo button disabled state)\n\n## EXPECTED RESULT\n1. Create a box\n2. Add a hole\n3. Press Cmd+Z\n4. Box returns (hole gone)\n5. Press Cmd+Z again -> nothing happens (only one level)\n\nProvide a plan before implementing code."
   },
   {

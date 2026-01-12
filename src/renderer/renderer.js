@@ -738,6 +738,82 @@ async function saveProject() {
 // Expose for debugging
 window.saveProject = saveProject;
 
+// ============================================================
+// EXPORT STL
+// ============================================================
+
+/**
+ * Export the current model to STL format
+ */
+async function exportSTL() {
+  try {
+    console.log('[Renderer] Exporting STL...');
+
+    // Check if we have code to export
+    if (!currentCode || !currentCode.trim()) {
+      console.error('[Renderer] No model code to export');
+      statusText.textContent = 'Error: No model to export';
+      statusText.style.color = '#f44747';
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 3000);
+      return;
+    }
+
+    // Show status
+    statusText.textContent = 'Exporting STL...';
+    statusText.style.color = '#4a9eff';
+
+    // Call IPC to export
+    const result = await ipcRenderer.invoke('export-stl', {
+      code: currentCode
+    });
+
+    if (result.success) {
+      console.log('[Renderer] STL exported successfully to:', result.filePath);
+
+      // Show success feedback in status bar
+      statusText.textContent = 'STL exported successfully';
+      statusText.style.color = '#4ec9b0'; // Success color
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 3000);
+    } else if (result.canceled) {
+      console.log('[Renderer] Export canceled by user');
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    } else {
+      console.error('[Renderer] Export failed:', result.error);
+
+      // Show error feedback
+      statusText.textContent = `Export failed: ${result.error}`;
+      statusText.style.color = '#f44747'; // Error color
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 5000);
+    }
+  } catch (err) {
+    console.error('[Renderer] Error in exportSTL:', err);
+
+    statusText.textContent = `Error: ${err.message}`;
+    statusText.style.color = '#f44747';
+
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }, 3000);
+  }
+}
+
+// Expose for debugging
+window.exportSTL = exportSTL;
+
 // Expose project state for debugging
 Object.defineProperty(window, 'currentFilePath', {
   get: () => currentFilePath,
@@ -764,6 +840,13 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault(); // Prevent browser save dialog
     saveProject();
+    return;
+  }
+
+  // Cmd+E / Ctrl+E: Export STL
+  if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+    e.preventDefault(); // Prevent browser default
+    exportSTL();
     return;
   }
 
