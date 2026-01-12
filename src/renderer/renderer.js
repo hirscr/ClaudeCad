@@ -108,6 +108,9 @@ let currentFilePath = null; // Path to currently open .cc file
 let projectName = 'untitled'; // Project name (extracted from chat or file)
 let isDirty = false; // Whether current state has unsaved changes
 
+// Feature color overrides (featureIndex -> colorHex)
+let featureColors = {};
+
 // Undo state (single-level)
 let previousCode = null;
 let undoneCode = null; // For redo support
@@ -650,6 +653,7 @@ async function clearProject() {
   projectName = 'untitled';
   isDirty = false;
   lastClickInfo = null;
+  featureColors = {};
 
   // Clear measure distance display
   document.getElementById('measure-distance').textContent = '';
@@ -1390,6 +1394,7 @@ async function loadProject() {
     undoneCode = null; // Clear redo state
     isDirty = false;
     projectJustLoaded = true; // Flag to inject context on next message
+    featureColors = {}; // Reset color overrides (will be restored from save data in future)
 
     // Update window title
     updateWindowTitle();
@@ -1817,19 +1822,23 @@ function createCodeBlockElement(language, code) {
 
 /**
  * Add a message to the chat
- * @param {string} role - 'user' | 'assistant' | 'error'
+ * @param {string} role - 'user' | 'assistant' | 'error' | 'system'
  * @param {string} content - Message content
  * @param {object} options - Optional parameters (rawResponse for error messages)
  */
 function addMessage(role, content, options = {}) {
-  // Store in history
+  // Store in history (only store user/assistant, not system/error)
   const message = {
     role,
     content,
     timestamp: new Date(),
     ...options
   };
-  messageHistory.push(message);
+
+  // Only add user and assistant messages to history for Claude context
+  if (role === 'user' || role === 'assistant') {
+    messageHistory.push(message);
+  }
 
   // Mark as unsaved (chat changed)
   isDirty = true;
@@ -1874,6 +1883,9 @@ function addMessage(role, content, options = {}) {
       rawEl.textContent = `Raw: ${options.rawResponse}`;
       contentEl.appendChild(rawEl);
     }
+  } else if (role === 'system') {
+    // System messages: simple text (like user messages)
+    contentEl.textContent = content;
   } else {
     // User messages: simple text
     contentEl.textContent = content;
@@ -2116,6 +2128,11 @@ window.hideColorPalette = hideColorPalette;
 window.applyColorToFeature = applyColorToFeature;
 window.deselectFeature = deselectFeature;
 
+// Expose feature colors for debugging
+Object.defineProperty(window, 'featureColors', {
+  get: () => featureColors
+});
+
 // ============================================================
 // HOVER HIGHLIGHT SYSTEM
 // ============================================================
@@ -2273,6 +2290,19 @@ renderer.domElement.addEventListener('mouseleave', () => {
 const colorPalette = document.getElementById('color-palette');
 const colorSwatches = document.querySelectorAll('.color-swatch');
 
+// Color name mapping for chat messages
+const colorNames = {
+  0x000000: 'black',
+  0xffffff: 'white',
+  0x4a9eff: 'blue',
+  0xff4444: 'red',
+  0xffff00: 'yellow',
+  0x44ff44: 'green',
+  0x00ffff: 'cyan',
+  0xff00ff: 'magenta',
+  0xff9900: 'orange'
+};
+
 /**
  * Initialize color swatches with their background colors
  */
@@ -2343,7 +2373,20 @@ function applyColorToFeature(colorHex) {
   const newColor = new THREE.Color(colorHex);
   selectedFeature.material.color.copy(newColor);
 
-  console.log(`[ColorPalette] Applied color ${colorHex} to feature ${selectedFeature.userData.featureIndex}`);
+  // Get feature index
+  const featureIndex = selectedFeature.userData.featureIndex;
+
+  // Get color name for chat message
+  const colorInt = parseInt(colorHex.replace('#', ''), 16);
+  const colorName = colorNames[colorInt] || 'custom';
+
+  console.log(`[ColorPalette] Applied color ${colorHex} to feature ${featureIndex}`);
+
+  // Add system message to chat
+  addMessage('system', `Color of Feature ${featureIndex} changed to ${colorName}`);
+
+  // Store color override for save/load
+  featureColors[featureIndex] = colorInt;
 
   // Update active swatch
   updateActiveColorSwatch();

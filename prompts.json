@@ -50,7 +50,7 @@
   {
     "id": "p6-09",
     "title": "Color Palette UI",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 9: Color Palette UI\n\n## CONTEXT\nWhen a feature is selected (clicked), show a color palette so user can change that feature's color.\n\n## COLOR PALETTE\n9 colors:\n- Black (#000000)\n- White (#ffffff)\n- Blue (#4a9eff)\n- Red (#ff4444)\n- Yellow (#ffff00)\n- Green (#44ff44)\n- Cyan (#00ffff)\n- Magenta (#ff00ff)\n- Orange (#ff9900)\n\n## UI DESIGN\n1. Small popup/toolbar appears near the clicked point or in a fixed location\n2. Shows 9 color swatches as clickable squares\n3. Current color has a border/highlight\n4. Clicking a color applies it immediately\n5. Clicking outside or pressing Escape closes palette\n6. Palette only visible when a feature is selected\n\n## IMPLEMENTATION OPTIONS\nA) Floating popup near click point\nB) Toolbar section that appears when feature selected\nC) Right-click context menu\n\nRecommend option B (toolbar) for simplicity.\n\n## FILES TO MODIFY\n- src/renderer/index.html (palette HTML)\n- src/renderer/styles.css (palette styling)\n- src/renderer/renderer.js (show/hide logic, click handlers)\n\n## EXPECTED RESULT\n1. Click on a feature\n2. Color palette appears\n3. Click a color -> feature changes to that color\n4. Click elsewhere -> palette hides\n5. Palette shows which color is currently active\n\nProvide a plan before implementing code."
   },
   {

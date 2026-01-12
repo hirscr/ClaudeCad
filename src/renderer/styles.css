@@ -296,6 +296,10 @@ canvas {
   align-items: flex-start;
 }
 
+.chat-message.system {
+  align-items: center;
+}
+
 .message-content {
   max-width: 75%;
   padding: 10px 14px;
@@ -321,6 +325,14 @@ canvas {
   background: rgba(244, 71, 71, 0.15);
   color: #f44747;
   border: 1px solid rgba(244, 71, 71, 0.4);
+}
+
+.chat-message.system .message-content {
+  background: rgba(78, 201, 176, 0.15);
+  color: #4ec9b0;
+  border: 1px solid rgba(78, 201, 176, 0.3);
+  font-size: 12px;
+  font-style: italic;
 }
 
 .message-timestamp {
