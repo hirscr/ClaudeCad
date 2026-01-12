@@ -1,38 +1,32 @@
 [
   {
-    "id": "p4-01",
-    "title": "Raycaster for Click Detection",
-    "complete": true,
-    "prompt": "# TASK 1: Raycaster for Click Detection\n\n## CONTEXT\nPhase 4: Selection & Measure. Need to detect when user clicks on the 3D model.\n\n## REQUIREMENTS\n1. Set up Three.js Raycaster in renderer.js\n2. On mouse click in viewport, cast ray from camera through mouse position\n3. Detect intersection with current mesh\n4. If hit, log the intersection point (x, y, z) to console\n5. Ignore clicks when no mesh loaded\n6. Ignore clicks on grid/axes (only detect mesh)\n\n## NOTES\n- Use Raycaster and mouse position normalized to (-1, 1)\n- Only respond to left-click\n- Don't interfere with OrbitControls drag\n\n## EXPECTED RESULT\n1. npm start\n2. Generate a model\n3. Click on model surface\n4. Console logs intersection coordinates\n\nProvide a plan before implementing code."
-  },
-  {
-    "id": "p4-02",
-    "title": "Capture Surface Normal at Click Point",
-    "complete": true,
-    "prompt": "# TASK 2: Capture Surface Normal at Click Point\n\n## CONTEXT\nWhen user clicks on model, we need both position AND surface normal for Claude to understand what face was clicked.\n\n## REQUIREMENTS\n1. Extend click detection to also capture face normal\n2. Raycaster intersection includes face normal\n3. Log both position and normal on click\n4. Store last click info: { position: {x,y,z}, normal: {x,y,z} }\n\n## NOTES\n- intersection.face.normal gives local normal\n- May need to transform to world coordinates\n- Normal helps Claude understand orientation (top face vs side face)\n\n## EXPECTED RESULT\n1. Click on top of a box\n2. Console shows position AND normal (0,0,1) indicating Z-up face\n3. Click on side, normal shows (1,0,0) or similar\n\nProvide a plan before implementing code."
-  },
-  {
-    "id": "p4-03",
-    "title": "Inject Click Coordinates into Prompts",
-    "complete": true,
-    "prompt": "# TASK 3: Inject Click Coordinates into Prompts\n\n## CONTEXT\nWhen user clicks then types, Claude should know where they clicked.\n\n## REQUIREMENTS\n1. Store last click info in renderer state\n2. When sending chat message, include click info if recent (within last 30 seconds)\n3. Add to prompt: \"User clicked at position (x, y, z) on surface with normal (nx, ny, nz)\"\n4. Clear click info after it's been used in a prompt\n5. Update claude-manager.js buildPrompt to accept optional click data\n\n## NOTES\n- Click info passed via IPC with chat message\n- Format coordinates to 1 decimal place for readability\n- Only include if user clicked recently before typing\n\n## EXPECTED RESULT\n1. Click on model surface\n2. Type \"fillet this edge\"\n3. Prompt to Claude includes click coordinates\n4. Claude interprets location and modifies appropriately\n\nProvide a plan before implementing code."
-  },
-  {
-    "id": "p4-04",
-    "title": "Confirmation Step Before Modification",
-    "complete": true,
-    "prompt": "# TASK 4: Confirmation Step Before Modification\n\n## CONTEXT\nBefore modifying geometry based on click selection, ask user to confirm Claude understood correctly.\n\n## REQUIREMENTS\n1. When Claude responds to a click-based request, show confirmation dialog\n2. Dialog shows: \"Claude wants to: [action description]. Proceed?\"\n3. Extract action description from Claude's explanation\n4. [Yes] button executes the code\n5. [No] button cancels, user can rephrase\n6. Skip confirmation for non-click-based requests\n\n## NOTES\n- Simple modal dialog in renderer\n- Only trigger when click coordinates were included in prompt\n- Keep previous mesh until confirmed\n\n## EXPECTED RESULT\n1. Click on edge, type \"fillet this\"\n2. Dialog: \"Claude wants to: Add 2mm fillet to the selected edge. Proceed?\"\n3. Click Yes -> model updates\n4. Click No -> nothing changes, can retry\n\nProvide a plan before implementing code."
-  },
-  {
-    "id": "p4-05",
-    "title": "Highlight Model on Hover",
-    "complete": true,
-    "prompt": "# TASK 5: Highlight Model on Hover\n\n## CONTEXT\nVisual feedback when hovering over clickable geometry.\n\n## REQUIREMENTS\n1. On mouse move, raycast to detect hover over mesh\n2. When hovering over mesh, show visual highlight\n3. For now, highlight entire model (not individual faces)\n4. Highlight options: outline glow, color tint, or emissive boost\n5. Remove highlight when mouse leaves mesh\n6. Don't highlight during drag (OrbitControls active)\n\n## NOTES\n- Keep it subtle - don't obscure the model\n- Could use OutlinePass from postprocessing, or simple emissive change\n- Performance matters - don't raycast every frame, throttle to ~30fps\n\n## EXPECTED RESULT\n1. Hover mouse over model -> subtle highlight appears\n2. Move mouse away -> highlight disappears\n3. Drag to rotate -> no highlight flicker\n\nProvide a plan before implementing code."
-  },
-  {
-    "id": "p4-06",
-    "title": "Measure Tool - Two Click Distance",
+    "id": "p5-01",
+    "title": "Save Project (.cc file)",
     "complete": false,
-    "prompt": "# TASK 6: Measure Tool - Two Click Distance\n\n## CONTEXT\nUsers need to measure distances on their models.\n\n## REQUIREMENTS\n1. Add measure mode toggle (button or M key)\n2. In measure mode, first click sets point A\n3. Second click sets point B\n4. Display distance between A and B in mm\n5. Show visual line between the two points\n6. Show measurement label near midpoint\n7. Clear measurement on next action or Escape\n\n## NOTES\n- Use Three.js Line for visual connection\n- Use CSS2D or sprite for distance label\n- Exit measure mode after measurement shown\n- Round to 1 decimal place\n\n## EXPECTED RESULT\n1. Enter measure mode\n2. Click point A on model\n3. Click point B on model\n4. See line between points with label \"23.5 mm\"\n5. Press Escape or click elsewhere to clear\n\nProvide a plan before implementing code."
+    "prompt": "# TASK 1: Save Project (.cc file)\n\n## CONTEXT\nPhase 5: Persistence. Users need to save their work to disk.\n\n## PROJECT FILE FORMAT (.cc)\nJSON structure from spec:\n```json\n{\n  \"version\": \"1.0\",\n  \"name\": \"my-bracket\",\n  \"created\": \"2026-01-10T...\",\n  \"modified\": \"2026-01-10T...\",\n  \"code\": \"from build123d import *\\n...\",\n  \"chat\": [\n    {\"role\": \"user\", \"content\": \"...\", \"timestamp\": \"...\"},\n    {\"role\": \"assistant\", \"content\": \"...\", \"timestamp\": \"...\"}\n  ]\n}\n```\n\n## REQUIREMENTS\n1. Add Cmd+S keyboard shortcut to trigger save\n2. Show native save dialog (Electron dialog.showSaveDialog)\n3. Default filename from project name or 'untitled'\n4. File extension: .cc\n5. Save current Build123d code + chat history\n6. Track current file path after save (for subsequent Cmd+S)\n7. Track saved state (to detect unsaved changes later)\n\n## NOTES\n- Main process handles file dialogs via IPC\n- Renderer sends { code, chatHistory } to main\n- Main constructs full JSON and writes file\n- After first save, subsequent Cmd+S saves to same file (no dialog)\n\n## EXPECTED RESULT\n1. npm start\n2. Create a model via chat\n3. Press Cmd+S\n4. Save dialog appears with .cc filter\n5. Save file, open in text editor, see valid JSON\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-02",
+    "title": "Load Project (.cc file)",
+    "complete": false,
+    "prompt": "# TASK 2: Load Project (.cc file)\n\n## CONTEXT\nUsers need to open previously saved projects.\n\n## REQUIREMENTS\n1. Add Cmd+O keyboard shortcut to trigger open\n2. Show native open dialog (Electron dialog.showOpenDialog)\n3. Filter for .cc files only\n4. Parse JSON and validate structure\n5. Restore code and rebuild model via Python\n6. Restore chat history in UI\n7. Update current file path (for save)\n8. Handle invalid/corrupt files gracefully\n\n## NOTES\n- Main process reads file, parses JSON\n- Send code to Python subprocess for rebuild\n- Send chat history to renderer for display\n- Clear existing state before loading\n\n## EXPECTED RESULT\n1. npm start\n2. Press Cmd+O\n3. Select a .cc file\n4. Model rebuilds and appears in viewport\n5. Chat history shows in panel\n6. Subsequent Cmd+S saves to same file\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-03",
+    "title": "Single-Level Undo",
+    "complete": false,
+    "prompt": "# TASK 3: Single-Level Undo\n\n## CONTEXT\nUsers need to undo the last change.\n\n## SPEC REFERENCE\n```javascript\nlet previousCode = null;\n\nfunction saveUndo() {\n  previousCode = currentCode;\n}\n\nfunction undo() {\n  if (previousCode) {\n    currentCode = previousCode;\n    previousCode = null;\n    rebuildModel();\n  }\n}\n```\n\n## REQUIREMENTS\n1. Before each Claude response applies, save current code as previousCode\n2. Add Cmd+Z keyboard shortcut for undo\n3. Undo restores previousCode and rebuilds model\n4. Only one level - after undo, previousCode is null\n5. No redo (user can re-ask Claude)\n6. Undo should work even if last operation failed\n7. Add undo message to chat: \"Undid last change\"\n\n## NOTES\n- Store in renderer state (or main process if needed)\n- Disable undo when previousCode is null\n- Consider adding visual indicator (undo button disabled state)\n\n## EXPECTED RESULT\n1. Create a box\n2. Add a hole\n3. Press Cmd+Z\n4. Box returns (hole gone)\n5. Press Cmd+Z again -> nothing happens (only one level)\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-04",
+    "title": "Export STL",
+    "complete": false,
+    "prompt": "# TASK 4: Export STL\n\n## CONTEXT\nUsers need to export models for 3D printing.\n\n## REQUIREMENTS\n1. Add Export STL menu option or keyboard shortcut (Cmd+E)\n2. Show native save dialog with .stl filter\n3. Call Python subprocess to export STL\n4. Use binary STL format (smaller, standard)\n5. Handle export errors gracefully\n6. Show success/failure in status bar\n\n## NOTES\n- Python already has export capability via cad_engine.py\n- May need new IPC channel: 'export-stl'\n- Export current model code, write STL to user-chosen path\n- Build123d: export_stl(part.part, \"output.stl\")\n\n## EXPECTED RESULT\n1. Create a model\n2. Press Cmd+E (or menu)\n3. Save dialog appears with .stl filter\n4. Choose location, save\n5. STL file opens in slicer software correctly\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-05",
+    "title": "Unsaved Changes Warning",
+    "complete": false,
+    "prompt": "# TASK 5: Unsaved Changes Warning\n\n## CONTEXT\nPrevent users from accidentally losing work.\n\n## REQUIREMENTS\n1. Track 'dirty' state - true when code changes after last save\n2. On window close (or Cmd+Q), check if dirty\n3. If dirty, show confirmation dialog:\n   - \"You have unsaved changes. Save before closing?\"\n   - [Save] [Don't Save] [Cancel]\n4. Save -> trigger save flow, then close\n5. Don't Save -> close without saving\n6. Cancel -> abort close, stay in app\n7. Also trigger on New Project / Load Project\n\n## NOTES\n- Use Electron's 'close' event on BrowserWindow\n- event.preventDefault() to block close, then show dialog\n- Track dirty state: set true on model change, false on save\n- Optional: show indicator in title bar (* for unsaved)\n\n## EXPECTED RESULT\n1. Create a model (don't save)\n2. Try to close window\n3. Warning dialog appears\n4. Click Cancel -> window stays open\n5. Save and close -> saves then closes\n6. After saving, close without warning\n\nProvide a plan before implementing code."
   }
 ]

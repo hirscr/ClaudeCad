@@ -103,6 +103,11 @@ let currentMesh = null;
 // Track current Build123d code (for iterative editing)
 let currentCode = '';
 
+// Track current project file path and saved state
+let currentFilePath = null; // Path to currently open .cc file
+let projectName = 'untitled'; // Project name (extracted from chat or file)
+let isSaved = true; // Whether current state has been saved
+
 // Raycaster for click detection and hover
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -585,10 +590,108 @@ window.executeCode = executeCode;
 window.toggleMeasureMode = toggleMeasureMode;
 window.clearMeasurement = clearMeasurement;
 
+// ============================================================
+// SAVE/LOAD PROJECT
+// ============================================================
+
+/**
+ * Save the current project to a .cc file
+ */
+async function saveProject() {
+  try {
+    console.log('[Renderer] Saving project...');
+
+    // Prepare chat history for saving (only role, content, timestamp)
+    const chatHistoryForSave = messageHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp.toISOString()
+    }));
+
+    // Call IPC to save
+    const result = await ipcRenderer.invoke('save-project', {
+      code: currentCode,
+      chatHistory: chatHistoryForSave,
+      projectName: projectName,
+      currentFilePath: currentFilePath
+    });
+
+    if (result.success) {
+      // Update current file path
+      currentFilePath = result.filePath;
+      isSaved = true;
+
+      // Extract project name from file path (remove extension and path)
+      const fileName = result.filePath.split(/[\\/]/).pop(); // Get last part of path
+      projectName = fileName.replace(/\.cc$/, ''); // Remove .cc extension
+
+      console.log('[Renderer] Project saved successfully to:', result.filePath);
+      console.log('[Renderer] Project name:', projectName);
+
+      // Show success feedback in status bar
+      statusText.textContent = 'Project saved';
+      statusText.style.color = '#4ec9b0'; // Success color
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 2000);
+    } else if (result.canceled) {
+      console.log('[Renderer] Save canceled by user');
+    } else {
+      console.error('[Renderer] Save failed:', result.error);
+
+      // Show error feedback
+      statusText.textContent = `Save failed: ${result.error}`;
+      statusText.style.color = '#f44747'; // Error color
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 3000);
+    }
+  } catch (err) {
+    console.error('[Renderer] Error in saveProject:', err);
+
+    statusText.textContent = `Error: ${err.message}`;
+    statusText.style.color = '#f44747';
+
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }, 3000);
+  }
+}
+
+// Expose for debugging
+window.saveProject = saveProject;
+
+// Expose project state for debugging
+Object.defineProperty(window, 'currentFilePath', {
+  get: () => currentFilePath,
+  set: (value) => { currentFilePath = value; }
+});
+
+Object.defineProperty(window, 'projectName', {
+  get: () => projectName,
+  set: (value) => { projectName = value; }
+});
+
+Object.defineProperty(window, 'isSaved', {
+  get: () => isSaved
+});
+
 // Temporary key listeners for testing
 document.addEventListener('keydown', (e) => {
   // Ignore key events when typing in input fields
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    return;
+  }
+
+  // Cmd+S / Ctrl+S: Save project
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault(); // Prevent browser save dialog
+    saveProject();
     return;
   }
 
@@ -828,6 +931,9 @@ function addMessage(role, content, options = {}) {
   };
   messageHistory.push(message);
 
+  // Mark as unsaved (chat changed)
+  isSaved = false;
+
   // Create message element
   const messageEl = document.createElement('div');
   messageEl.className = `chat-message ${role}`;
@@ -985,6 +1091,9 @@ async function sendChatMessage() {
 
       // Update current code
       currentCode = result.code;
+
+      // Mark as unsaved (code changed)
+      isSaved = false;
 
       // Add assistant message
       addMessage('assistant', result.explanation);

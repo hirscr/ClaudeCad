@@ -93,3 +93,55 @@
 17. **Mesh Z-Inversion**
     - Initial rotation -90° on X was wrong direction
     - Fix: Change to +90° (positive `Math.PI / 2`)
+
+## Phase 4: Selection & Measure
+
+### Selection System
+
+18. **Coordinate-Based Selection Is Imprecise**
+    - User clicks, Claude gets coordinates + normal, but neither can be certain which face/edge was selected
+    - Claude often guesses wrong ("this click is near the eye lens area...")
+    - Real fix requires topology mapping (Section 9 in spec) - future work
+    - Workaround: Show clicked coordinates in UI so user can verify
+
+19. **Selection Marker Should Persist Until Escape**
+    - Click marker was disappearing on its own
+    - Fix: Only clear on explicit Escape key press
+
+20. **Camera Resets After Generation Is Annoying**
+    - `fitCameraToObject()` was called on every mesh load
+    - User positions camera, generates model, camera jumps to different view
+    - Fix: Only fit camera on first model load (when test cube removed), not subsequent loads
+
+21. **View Presets Need camera.up Reset**
+    - TrackballControls allows free rotation including tilting "up" direction
+    - View presets (Front, Top, etc.) looked wrong because up vector was tilted
+    - Fix: Reset `camera.up` to (0, 0, 1) in view preset functions
+
+### Prompt Engineering for Models
+
+22. **Detailed Quantitative Prompts Work Best**
+    - Explicit coordinates, dimensions, primitive types, and positions
+    - Vague prompts ("make it look like Mickey Mouse") fail
+    - Good: "Sphere diameter 25mm centered at (0, 0, 0)"
+    - Bad: "Add ears on top"
+
+23. **Simple Primitives Only**
+    - Spheres, cylinders, boxes with union/subtract work reliably
+    - Angled geometry (rotated boxes, trapezoids) fails - Claude can't generate correct Build123d code
+    - R2-D2 with angled legs broke; Minion with simple cylinders worked great
+
+24. **Dome/Hemisphere Orientation Must Be Explicit**
+    - "Hemisphere" is ambiguous - which way does the flat side face?
+    - Must specify: "flat side faces DOWN, rounded side faces UP"
+    - BB-8 head was inverted until explicitly corrected
+
+25. **Disconnected Geometry Happens**
+    - Parts can end up floating (BB-8 antenna detached from head)
+    - Fix: Explicitly state "attached to" or give coordinates that ensure overlap
+    - Union operations need parts to actually touch/overlap
+
+26. **Build123d Functions Not Always Known**
+    - Claude sometimes uses undefined functions (e.g., `shell()` without proper syntax)
+    - Error: "name 'shell' is not defined"
+    - Claude's Build123d knowledge is imperfect

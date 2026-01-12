@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const pythonManager = require('./python-manager');
@@ -91,6 +91,69 @@ ipcMain.handle('send-chat-message', async (event, { message, currentCode, histor
     }
   } catch (err) {
     console.error('[Main] send-chat-message error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
+// IPC handler for saving project
+ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, currentFilePath }) => {
+  try {
+    console.log('[Main] Received save-project request');
+    console.log('[Main] Current file path:', currentFilePath || 'none (new file)');
+    console.log('[Main] Project name:', projectName || 'untitled');
+    console.log('[Main] Code length:', code?.length || 0);
+    console.log('[Main] Chat history length:', chatHistory?.length || 0);
+
+    let filePath = currentFilePath;
+
+    // If no current file path, show save dialog
+    if (!filePath) {
+      const result = await dialog.showSaveDialog({
+        title: 'Save Project',
+        defaultPath: (projectName || 'untitled') + '.cc',
+        filters: [
+          { name: 'ClaudeCAD Project', extensions: ['cc'] }
+        ],
+        properties: ['createDirectory', 'showOverwriteConfirmation']
+      });
+
+      if (result.canceled) {
+        console.log('[Main] Save dialog canceled');
+        return {
+          success: false,
+          canceled: true
+        };
+      }
+
+      filePath = result.filePath;
+      console.log('[Main] User selected path:', filePath);
+    }
+
+    // Construct project JSON
+    const now = new Date().toISOString();
+    const projectData = {
+      version: '1.0',
+      name: projectName || 'untitled',
+      created: now, // For simplicity, using current time (should track this separately in future)
+      modified: now,
+      code: code || '',
+      chat: chatHistory || []
+    };
+
+    // Write to file
+    const jsonString = JSON.stringify(projectData, null, 2);
+    fs.writeFileSync(filePath, jsonString, 'utf8');
+    console.log('[Main] Project saved successfully to:', filePath);
+
+    return {
+      success: true,
+      filePath: filePath
+    };
+  } catch (err) {
+    console.error('[Main] save-project error:', err);
     return {
       success: false,
       error: err.message
