@@ -26,7 +26,7 @@
   {
     "id": "p4-05",
     "title": "Highlight Model on Hover",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 5: Highlight Model on Hover\n\n## CONTEXT\nVisual feedback when hovering over clickable geometry.\n\n## REQUIREMENTS\n1. On mouse move, raycast to detect hover over mesh\n2. When hovering over mesh, show visual highlight\n3. For now, highlight entire model (not individual faces)\n4. Highlight options: outline glow, color tint, or emissive boost\n5. Remove highlight when mouse leaves mesh\n6. Don't highlight during drag (OrbitControls active)\n\n## NOTES\n- Keep it subtle - don't obscure the model\n- Could use OutlinePass from postprocessing, or simple emissive change\n- Performance matters - don't raycast every frame, throttle to ~30fps\n\n## EXPECTED RESULT\n1. Hover mouse over model -> subtle highlight appears\n2. Move mouse away -> highlight disappears\n3. Drag to rotate -> no highlight flicker\n\nProvide a plan before implementing code."
   },
   {

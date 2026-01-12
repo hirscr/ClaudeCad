@@ -117,6 +117,17 @@ let isDragging = false;
 let lastHoverCheck = 0;
 const hoverCheckInterval = 33; // ~30fps (33ms)
 
+// Measure mode state
+let measureMode = false;
+let measurePointA = null;
+let measurePointB = null;
+let measureVisuals = {
+  markerA: null,
+  markerB: null,
+  line: null,
+  label: null
+};
+
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
@@ -152,6 +163,11 @@ document.getElementById('view-dropdown').addEventListener('change', (e) => {
       fitCameraToObject(target, direction);
     }
   }
+});
+
+// Handle measure button click
+document.getElementById('measure-button').addEventListener('click', () => {
+  toggleMeasureMode();
 });
 
 // Handle viewport resize using ResizeObserver
@@ -212,6 +228,17 @@ function loadMesh(path) {
   if (hoveredMesh) {
     removeHighlight(hoveredMesh);
     hoveredMesh = null;
+  }
+
+  // Clear any active measurements when loading new mesh
+  if (measurePointA || measurePointB) {
+    clearMeasurement();
+  }
+  // Exit measure mode if active
+  if (measureMode) {
+    measureMode = false;
+    const measureButton = document.getElementById('measure-button');
+    measureButton.classList.remove('active');
   }
 
   // Remove previous mesh if exists
@@ -391,18 +418,198 @@ async function executeCode(code) {
   }
 }
 
+// ============================================================
+// MEASURE TOOL
+// ============================================================
+
+/**
+ * Clear all measurement visuals from the scene
+ */
+function clearMeasurement() {
+  if (measureVisuals.markerA) {
+    scene.remove(measureVisuals.markerA);
+    measureVisuals.markerA.geometry.dispose();
+    measureVisuals.markerA.material.dispose();
+    measureVisuals.markerA = null;
+  }
+  if (measureVisuals.markerB) {
+    scene.remove(measureVisuals.markerB);
+    measureVisuals.markerB.geometry.dispose();
+    measureVisuals.markerB.material.dispose();
+    measureVisuals.markerB = null;
+  }
+  if (measureVisuals.line) {
+    scene.remove(measureVisuals.line);
+    measureVisuals.line.geometry.dispose();
+    measureVisuals.line.material.dispose();
+    measureVisuals.line = null;
+  }
+  if (measureVisuals.label) {
+    scene.remove(measureVisuals.label);
+    measureVisuals.label.material.map.dispose();
+    measureVisuals.label.material.dispose();
+    measureVisuals.label = null;
+  }
+
+  measurePointA = null;
+  measurePointB = null;
+}
+
+/**
+ * Create a small sphere marker at a point
+ */
+function createMarker(position) {
+  const geometry = new THREE.SphereGeometry(1, 16, 16);
+  const material = new THREE.MeshBasicMaterial({ color: 0x4a9eff });
+  const marker = new THREE.Mesh(geometry, material);
+  marker.position.copy(position);
+  return marker;
+}
+
+/**
+ * Create a distance label sprite
+ */
+function createDistanceLabel(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = 'rgba(37, 37, 38, 0.95)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Border
+  ctx.strokeStyle = '#4a9eff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+  // Text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 32px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 128, 32);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(20, 5, 1);
+  return sprite;
+}
+
+/**
+ * Toggle measure mode on/off
+ */
+function toggleMeasureMode() {
+  measureMode = !measureMode;
+
+  const measureButton = document.getElementById('measure-button');
+  if (measureMode) {
+    measureButton.classList.add('active');
+    statusText.textContent = 'Measure mode: Click first point';
+    statusText.style.color = '#4a9eff';
+    console.log('[Measure] Mode activated');
+  } else {
+    measureButton.classList.remove('active');
+    clearMeasurement();
+    statusText.textContent = 'Ready';
+    statusText.style.color = '#888888';
+    console.log('[Measure] Mode deactivated');
+  }
+}
+
+/**
+ * Handle measure click - called when user clicks in measure mode
+ */
+function handleMeasureClick(point) {
+  if (!measurePointA) {
+    // First click - set point A
+    measurePointA = point.clone();
+
+    // Create marker at point A
+    measureVisuals.markerA = createMarker(measurePointA);
+    scene.add(measureVisuals.markerA);
+
+    statusText.textContent = 'Measure mode: Click second point';
+    statusText.style.color = '#4a9eff';
+    console.log(`[Measure] Point A: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
+  } else if (!measurePointB) {
+    // Second click - set point B and complete measurement
+    measurePointB = point.clone();
+
+    // Create marker at point B
+    measureVisuals.markerB = createMarker(measurePointB);
+    scene.add(measureVisuals.markerB);
+
+    // Calculate distance
+    const distance = measurePointA.distanceTo(measurePointB);
+    const distanceText = `${distance.toFixed(1)} mm`;
+    console.log(`[Measure] Point B: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
+    console.log(`[Measure] Distance: ${distanceText}`);
+
+    // Create line between points
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints([measurePointA, measurePointB]);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x4a9eff, linewidth: 2 });
+    measureVisuals.line = new THREE.Line(lineGeometry, lineMaterial);
+    scene.add(measureVisuals.line);
+
+    // Create label at midpoint
+    const midpoint = new THREE.Vector3().addVectors(measurePointA, measurePointB).multiplyScalar(0.5);
+    measureVisuals.label = createDistanceLabel(distanceText);
+    measureVisuals.label.position.copy(midpoint);
+    scene.add(measureVisuals.label);
+
+    // Exit measure mode
+    measureMode = false;
+    const measureButton = document.getElementById('measure-button');
+    measureButton.classList.remove('active');
+
+    statusText.textContent = `Distance: ${distanceText}`;
+    statusText.style.color = '#4ec9b0';
+
+    // Reset status after 5 seconds
+    setTimeout(() => {
+      if (statusText.textContent === `Distance: ${distanceText}`) {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }
+    }, 5000);
+  }
+}
+
 // Expose functions on window object
 window.setProcessing = setProcessing;
 window.showLoading = showLoading;
 window.hideLoading = hideLoading;
 window.loadMesh = loadMesh;
 window.executeCode = executeCode;
+window.toggleMeasureMode = toggleMeasureMode;
+window.clearMeasurement = clearMeasurement;
 
 // Temporary key listeners for testing
 document.addEventListener('keydown', (e) => {
   // Ignore key events when typing in input fields
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
     return;
+  }
+
+  // Escape key: clear measurement and exit measure mode
+  if (e.key === 'Escape') {
+    if (measureMode || measurePointA || measurePointB) {
+      if (measureMode) {
+        toggleMeasureMode();
+      } else {
+        clearMeasurement();
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }
+    }
+  }
+
+  // M key: toggle measure mode
+  if (e.key === 'm' || e.key === 'M') {
+    toggleMeasureMode();
   }
 
   // L key: toggle loading spinner
@@ -1023,11 +1230,18 @@ renderer.domElement.addEventListener('click', (event) => {
     return false;
   });
 
-  // Log intersection point and normal if found
+  // If we hit the mesh
   if (meshIntersects.length > 0) {
     const firstHit = meshIntersects[0];
     const point = firstHit.point;
 
+    // If in measure mode, handle measurement
+    if (measureMode) {
+      handleMeasureClick(point);
+      return; // Don't process normal click info
+    }
+
+    // Normal click handling (not in measure mode)
     // Get face normal if available
     if (firstHit.face && firstHit.face.normal) {
       // Clone the local face normal

@@ -42,6 +42,7 @@ body {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 #view-dropdown {
@@ -61,6 +62,41 @@ body {
 
 #view-dropdown:focus {
   border-color: #4a9eff;
+}
+
+/* Measure Button */
+.header-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #252526;
+  color: #ffffff;
+  border: 1px solid #3c3c3c;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.header-button:hover {
+  background: #2a2d2e;
+}
+
+.header-button.active {
+  background: rgba(74, 158, 255, 0.2);
+  border-color: #4a9eff;
+  color: #4a9eff;
+}
+
+.measure-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.measure-label {
+  font-weight: 500;
 }
 
 #viewport {
