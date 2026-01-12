@@ -703,17 +703,38 @@ async function sendChatMessage() {
       .filter(msg => msg.role === 'user' || msg.role === 'assistant')
       .map(msg => ({ role: msg.role, content: msg.content }));
 
+    // Check if we have recent click info (within last 30 seconds)
+    let clickInfo = null;
+    if (lastClickInfo && lastClickInfo.timestamp) {
+      const timeSinceClick = Date.now() - lastClickInfo.timestamp;
+      if (timeSinceClick <= 30000) { // 30 seconds
+        clickInfo = {
+          position: lastClickInfo.position,
+          normal: lastClickInfo.normal
+        };
+        console.log('[Chat] Including recent click info from', (timeSinceClick / 1000).toFixed(1), 'seconds ago');
+      }
+    }
+
     console.log('[Chat] Sending to Claude via IPC...');
     console.log('[Chat] Message:', message);
     console.log('[Chat] Current code length:', currentCode.length);
     console.log('[Chat] History entries:', history.length);
+    console.log('[Chat] Click info:', clickInfo ? 'included' : 'none');
 
     // Call IPC
     const result = await ipcRenderer.invoke('send-chat-message', {
       message,
       currentCode,
-      history
+      history,
+      clickInfo
     });
+
+    // Clear click info after using it
+    if (clickInfo) {
+      lastClickInfo = null;
+      console.log('[Chat] Cleared click info after sending');
+    }
 
     console.log('[Chat] Received result:', result);
 
@@ -871,7 +892,7 @@ renderer.domElement.addEventListener('click', (event) => {
       // Normalize to ensure it's a unit vector
       worldNormal.normalize();
 
-      // Store last click info
+      // Store last click info with timestamp
       lastClickInfo = {
         position: {
           x: point.x,
@@ -882,7 +903,8 @@ renderer.domElement.addEventListener('click', (event) => {
           x: worldNormal.x,
           y: worldNormal.y,
           z: worldNormal.z
-        }
+        },
+        timestamp: Date.now()
       };
 
       // Log with formatted output
@@ -896,7 +918,8 @@ renderer.domElement.addEventListener('click', (event) => {
           y: point.y,
           z: point.z
         },
-        normal: null
+        normal: null,
+        timestamp: Date.now()
       };
 
       console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);

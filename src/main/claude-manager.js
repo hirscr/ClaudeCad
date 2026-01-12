@@ -11,12 +11,13 @@ const { spawn } = require('child_process');
  * @param {string} userMessage - The user's natural language request
  * @param {string} currentCode - The current Build123d code (empty string if none)
  * @param {Array} chatHistory - Array of {role, content} messages
+ * @param {Object} clickInfo - Optional click information {position: {x, y, z}, normal: {x, y, z}}
  * @returns {Promise<string>} Claude's raw response text
  */
-function sendPrompt(userMessage, currentCode = '', chatHistory = []) {
+function sendPrompt(userMessage, currentCode = '', chatHistory = [], clickInfo = null) {
   return new Promise((resolve, reject) => {
     // Build the full prompt
-    const prompt = buildPrompt(userMessage, currentCode, chatHistory);
+    const prompt = buildPrompt(userMessage, currentCode, chatHistory, clickInfo);
 
     console.log('[ClaudeManager] Sending prompt to Claude CLI...');
     console.log('[ClaudeManager] Prompt length:', prompt.length);
@@ -91,14 +92,15 @@ function sendPrompt(userMessage, currentCode = '', chatHistory = []) {
 
 /**
  * Build the full prompt to send to Claude.
- * Includes system context, current code, chat history, and user message.
+ * Includes system context, current code, chat history, click info, and user message.
  *
  * @param {string} userMessage - The user's current request
  * @param {string} currentCode - The current Build123d code
  * @param {Array} chatHistory - Previous messages (last 5 max)
+ * @param {Object} clickInfo - Optional click information {position: {x, y, z}, normal: {x, y, z}}
  * @returns {string} The complete prompt
  */
-function buildPrompt(userMessage, currentCode, chatHistory) {
+function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
   let prompt = '';
 
   // System context
@@ -157,6 +159,20 @@ function buildPrompt(userMessage, currentCode, chatHistory) {
   // User's current request
   prompt += '# User Request\n\n';
   prompt += userMessage;
+
+  // Add click info if available
+  if (clickInfo && clickInfo.position) {
+    prompt += '\n\n# Click Context\n\n';
+    const pos = clickInfo.position;
+    prompt += `User clicked at position (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`;
+
+    if (clickInfo.normal) {
+      const norm = clickInfo.normal;
+      prompt += ` on surface with normal (${norm.x.toFixed(1)}, ${norm.y.toFixed(1)}, ${norm.z.toFixed(1)})`;
+    }
+
+    prompt += '.\n';
+  }
 
   return prompt;
 }

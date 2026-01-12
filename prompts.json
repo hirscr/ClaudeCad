@@ -8,7 +8,7 @@
   {
     "id": "p4-02",
     "title": "Capture Surface Normal at Click Point",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 2: Capture Surface Normal at Click Point\n\n## CONTEXT\nWhen user clicks on model, we need both position AND surface normal for Claude to understand what face was clicked.\n\n## REQUIREMENTS\n1. Extend click detection to also capture face normal\n2. Raycaster intersection includes face normal\n3. Log both position and normal on click\n4. Store last click info: { position: {x,y,z}, normal: {x,y,z} }\n\n## NOTES\n- intersection.face.normal gives local normal\n- May need to transform to world coordinates\n- Normal helps Claude understand orientation (top face vs side face)\n\n## EXPECTED RESULT\n1. Click on top of a box\n2. Console shows position AND normal (0,0,1) indicating Z-up face\n3. Click on side, normal shows (1,0,0) or similar\n\nProvide a plan before implementing code."
   },
   {

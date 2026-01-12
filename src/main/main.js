@@ -42,15 +42,16 @@ ipcMain.handle('execute-code', async (event, code) => {
   }
 });
 
-ipcMain.handle('send-chat-message', async (event, { message, currentCode, history }) => {
+ipcMain.handle('send-chat-message', async (event, { message, currentCode, history, clickInfo }) => {
   try {
     console.log('[Main] Received send-chat-message request');
     console.log('[Main] Message:', message);
     console.log('[Main] Current code length:', currentCode?.length || 0);
     console.log('[Main] History length:', history?.length || 0);
+    console.log('[Main] Click info:', clickInfo ? 'present' : 'none');
 
     // Send prompt to Claude
-    const rawResponse = await claudeManager.sendPrompt(message, currentCode, history);
+    const rawResponse = await claudeManager.sendPrompt(message, currentCode, history, clickInfo);
     console.log('[Main] Claude response received, length:', rawResponse.length);
 
     // Parse response
