@@ -108,6 +108,9 @@ let currentFilePath = null; // Path to currently open .cc file
 let projectName = 'untitled'; // Project name (extracted from chat or file)
 let isSaved = true; // Whether current state has been saved
 
+// Undo state (single-level)
+let previousCode = null;
+
 // Raycaster for click detection and hover
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -433,6 +436,75 @@ async function executeCode(code) {
 }
 
 // ============================================================
+// UNDO FUNCTIONALITY (Single-Level)
+// ============================================================
+
+/**
+ * Save current code state for undo
+ */
+function saveUndo() {
+  previousCode = currentCode;
+  console.log('[Undo] Saved previous state');
+}
+
+/**
+ * Undo last change (single-level)
+ */
+async function undo() {
+  if (!previousCode) {
+    console.log('[Undo] No previous state to restore');
+    return;
+  }
+
+  console.log('[Undo] Restoring previous state...');
+
+  // Store the code to restore
+  const codeToRestore = previousCode;
+
+  // Clear undo state (single-level only)
+  previousCode = null;
+
+  // Update current code
+  currentCode = codeToRestore;
+
+  // Mark as unsaved
+  isSaved = false;
+
+  // Add system message to chat
+  addMessage('assistant', 'Undid last change');
+
+  // Rebuild model with previous code
+  if (currentCode) {
+    try {
+      await executeCode(currentCode);
+    } catch (err) {
+      console.error('[Undo] Failed to execute restored code:', err);
+      addMessage('error', `Failed to restore previous state: ${err.message}`);
+    }
+  } else {
+    // No code to restore - clear the viewport
+    if (currentMesh) {
+      scene.remove(currentMesh);
+      currentMesh.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(mat => mat.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      });
+      currentMesh = null;
+      console.log('[Undo] Cleared mesh (restored to empty state)');
+    }
+  }
+}
+
+// Expose undo function for debugging
+window.undo = undo;
+
+// ============================================================
 // MEASURE TOOL
 // ============================================================
 
@@ -692,6 +764,13 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault(); // Prevent browser save dialog
     saveProject();
+    return;
+  }
+
+  // Cmd+Z / Ctrl+Z: Undo last change
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+    e.preventDefault(); // Prevent browser undo
+    undo();
     return;
   }
 
@@ -1088,6 +1167,9 @@ async function sendChatMessage() {
     if (result.success) {
       // Success: code executed, mesh generated
       console.log('[Chat] Success! Loading mesh:', result.meshPath);
+
+      // Save current code for undo before updating
+      saveUndo();
 
       // Update current code
       currentCode = result.code;

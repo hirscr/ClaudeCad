@@ -2,13 +2,13 @@
   {
     "id": "p5-01",
     "title": "Save Project (.cc file)",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 1: Save Project (.cc file)\n\n## CONTEXT\nPhase 5: Persistence. Users need to save their work to disk.\n\n## PROJECT FILE FORMAT (.cc)\nJSON structure from spec:\n```json\n{\n  \"version\": \"1.0\",\n  \"name\": \"my-bracket\",\n  \"created\": \"2026-01-10T...\",\n  \"modified\": \"2026-01-10T...\",\n  \"code\": \"from build123d import *\\n...\",\n  \"chat\": [\n    {\"role\": \"user\", \"content\": \"...\", \"timestamp\": \"...\"},\n    {\"role\": \"assistant\", \"content\": \"...\", \"timestamp\": \"...\"}\n  ]\n}\n```\n\n## REQUIREMENTS\n1. Add Cmd+S keyboard shortcut to trigger save\n2. Show native save dialog (Electron dialog.showSaveDialog)\n3. Default filename from project name or 'untitled'\n4. File extension: .cc\n5. Save current Build123d code + chat history\n6. Track current file path after save (for subsequent Cmd+S)\n7. Track saved state (to detect unsaved changes later)\n\n## NOTES\n- Main process handles file dialogs via IPC\n- Renderer sends { code, chatHistory } to main\n- Main constructs full JSON and writes file\n- After first save, subsequent Cmd+S saves to same file (no dialog)\n\n## EXPECTED RESULT\n1. npm start\n2. Create a model via chat\n3. Press Cmd+S\n4. Save dialog appears with .cc filter\n5. Save file, open in text editor, see valid JSON\n\nProvide a plan before implementing code."
   },
   {
     "id": "p5-02",
     "title": "Load Project (.cc file)",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 2: Load Project (.cc file)\n\n## CONTEXT\nUsers need to open previously saved projects.\n\n## REQUIREMENTS\n1. Add Cmd+O keyboard shortcut to trigger open\n2. Show native open dialog (Electron dialog.showOpenDialog)\n3. Filter for .cc files only\n4. Parse JSON and validate structure\n5. Restore code and rebuild model via Python\n6. Restore chat history in UI\n7. Update current file path (for save)\n8. Handle invalid/corrupt files gracefully\n\n## NOTES\n- Main process reads file, parses JSON\n- Send code to Python subprocess for rebuild\n- Send chat history to renderer for display\n- Clear existing state before loading\n\n## EXPECTED RESULT\n1. npm start\n2. Press Cmd+O\n3. Select a .cc file\n4. Model rebuilds and appears in viewport\n5. Chat history shows in panel\n6. Subsequent Cmd+S saves to same file\n\nProvide a plan before implementing code."
   },
   {
