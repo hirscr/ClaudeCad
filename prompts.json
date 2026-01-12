@@ -86,7 +86,7 @@
   {
     "id": "p6-15",
     "title": "Fit to View Button",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 15: Fit to View Button\n\n## CONTEXT\nUsers should be able to reset the camera to frame the entire model.\n\n## REQUIREMENTS\n1. Add Fit to View button to toolbar (icon: frame/zoom-to-fit)\n2. Clicking calls fitCameraToObject with current mesh\n3. Uses current view direction (doesn't reset to isometric)\n4. Works even after user has orbited/zoomed away\n5. Optional: keyboard shortcut (F key)\n\n## IMPLEMENTATION\n```javascript\nfunction fitToView() {\n  const target = currentMesh || testCube;\n  if (target) {\n    // Get current camera direction\n    const direction = new THREE.Vector3();\n    camera.getWorldDirection(direction);\n    direction.negate(); // Camera looks opposite to its direction\n    \n    fitCameraToObject(target, direction);\n  }\n}\n```\n\nOr simpler - just use isometric view:\n```javascript\nfunction fitToView() {\n  const target = currentMesh || testCube;\n  if (target) {\n    fitCameraToObject(target, viewPresets.isometric);\n  }\n}\n```\n\n## FILES TO MODIFY\n- src/renderer/index.html (add button)\n- src/renderer/renderer.js (fit logic)\n\n## EXPECTED RESULT\n1. Load a model\n2. Zoom way in or orbit away\n3. Click Fit to View\n4. Camera resets to show entire model\n\nProvide a plan before implementing code."
   },
   {

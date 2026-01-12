@@ -1805,33 +1805,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') {
     toggleMeasureMode();
   }
-
-  // L key: toggle loading spinner
-  if (e.key === 'l' || e.key === 'L') {
-    if (loadingOverlay.classList.contains('hidden')) {
-      showLoading();
-    } else {
-      hideLoading();
-    }
-  }
-
-  // T key: test Python pipeline with simple box
-  if (e.key === 't' || e.key === 'T') {
-    console.log('[Renderer] Testing Python pipeline...');
-
-    const testCode = `from build123d import *
-
-# Create a simple box with a hole
-with BuildPart() as part:
-    Box(30, 30, 20)
-    with Locations((0, 0, 10)):  # Top of centered box
-        Hole(radius=5, depth=20)
-
-part = part.part
-`;
-
-    executeCode(testCode);
-  }
 });
 
 // Chat panel resize functionality
