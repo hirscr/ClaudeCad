@@ -87,6 +87,16 @@ body {
   background: #2a2d2e;
 }
 
+.header-button:active {
+  transform: translateY(2px);
+}
+
+.header-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .header-button.active {
   background: rgba(74, 158, 255, 0.2);
   border-color: #4a9eff;

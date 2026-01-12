@@ -164,11 +164,11 @@ let isPulsing = false;
 let pulseStartTime = null;
 
 // Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(50, -50, 50);
+directionalLight.position.set(0, 50, 50);
 scene.add(directionalLight);
 
 // Animation loop
@@ -216,6 +216,10 @@ document.getElementById('undo-button').addEventListener('click', () => {
 
 document.getElementById('redo-button').addEventListener('click', () => {
   redo();
+});
+
+document.getElementById('clear-button').addEventListener('click', () => {
+  clearProject();
 });
 
 document.getElementById('axes-button').addEventListener('click', () => {
@@ -270,6 +274,26 @@ const loadingOverlay = document.getElementById('loading-overlay');
 const statusText = document.getElementById('status-text');
 const statusStats = document.getElementById('status-stats');
 
+// Toolbar buttons that should be disabled during processing
+const toolbarButtonIds = [
+  'open-button', 'save-button', 'undo-button', 'redo-button', 'clear-button',
+  'axes-button', 'measure-button', 'refresh-context-button', 'export-stl-button',
+  'fit-view-button', 'solid-button', 'wireframe-button', 'xray-button'
+];
+
+/**
+ * Enable or disable toolbar buttons during processing
+ * @param {boolean} disabled - Whether buttons should be disabled
+ */
+function setToolbarDisabled(disabled) {
+  toolbarButtonIds.forEach(id => {
+    const button = document.getElementById(id);
+    if (button) {
+      button.disabled = disabled;
+    }
+  });
+}
+
 /**
  * Set processing state with optional phase indicator
  * @param {string|null} phase - 'claude' | 'python' | null
@@ -281,6 +305,9 @@ function setProcessing(phase) {
     statusText.textContent = 'Asking Claude...';
     statusText.style.color = '#888888';
 
+    // Disable toolbar buttons
+    setToolbarDisabled(true);
+
     // Start pulse animation if model exists
     if (currentMesh) {
       startPulseAnimation();
@@ -291,12 +318,18 @@ function setProcessing(phase) {
     loadingOverlay.classList.remove('hidden');
     statusText.textContent = 'Building model...';
     statusText.style.color = '#888888';
+
+    // Keep toolbar disabled
+    setToolbarDisabled(true);
   } else {
     // Done: Stop pulse, hide loading, reset status
     stopPulseAnimation(); // Stop pulse if active
     loadingOverlay.classList.add('hidden');
     statusText.textContent = 'Ready';
     statusText.style.color = '#888888';
+
+    // Re-enable toolbar buttons
+    setToolbarDisabled(false);
   }
 }
 
@@ -333,22 +366,29 @@ function startPulseAnimation() {
   isPulsing = true;
   pulseStartTime = performance.now();
 
-  // Store original colors for all materials in the mesh
+  // Store original colors for all materials in the mesh (including edge lines)
   originalColors.clear();
   currentMesh.traverse((child) => {
     if (child.isMesh && child.material) {
-      // Store original color and emissive
+      // Store original color and emissive for mesh faces
       originalColors.set(child.material, {
         color: child.material.color.clone(),
-        emissive: child.material.emissive.clone(),
+        emissive: child.material.emissive ? child.material.emissive.clone() : null,
         emissiveIntensity: child.material.emissiveIntensity
+      });
+    } else if (child.isLineSegments && child.material) {
+      // Store original color for edge lines
+      originalColors.set(child.material, {
+        color: child.material.color.clone(),
+        emissive: null,
+        emissiveIntensity: 0
       });
     }
   });
 
-  // Define pulse colors
-  const dimRed = new THREE.Color(0x661111);    // Dark red
-  const lightRed = new THREE.Color(0xaa3333);  // Lighter red
+  // Define pulse colors (vivid red)
+  const dimRed = new THREE.Color(0xcc2222);    // Base red
+  const lightRed = new THREE.Color(0xff4444);  // Peak red
 
   // Animation loop
   function animatePulse() {
@@ -368,10 +408,12 @@ function startPulseAnimation() {
     const currentColor = new THREE.Color();
     currentColor.lerpColors(dimRed, lightRed, t);
 
-    // Apply to all mesh materials
+    // Apply to all mesh materials and edge lines
     if (currentMesh) {
       currentMesh.traverse((child) => {
         if (child.isMesh && child.material) {
+          child.material.color.copy(currentColor);
+        } else if (child.isLineSegments && child.material) {
           child.material.color.copy(currentColor);
         }
       });
@@ -406,14 +448,16 @@ function stopPulseAnimation() {
     pulseAnimationId = null;
   }
 
-  // Restore original colors
+  // Restore original colors (meshes and edge lines)
   if (currentMesh) {
     currentMesh.traverse((child) => {
-      if (child.isMesh && child.material && originalColors.has(child.material)) {
+      if ((child.isMesh || child.isLineSegments) && child.material && originalColors.has(child.material)) {
         const original = originalColors.get(child.material);
         child.material.color.copy(original.color);
-        child.material.emissive.copy(original.emissive);
-        child.material.emissiveIntensity = original.emissiveIntensity;
+        if (original.emissive && child.material.emissive) {
+          child.material.emissive.copy(original.emissive);
+          child.material.emissiveIntensity = original.emissiveIntensity;
+        }
       }
     });
   }
@@ -447,6 +491,33 @@ function calculateFaceCount() {
 }
 
 /**
+ * Estimate context window usage percentage
+ * Based on character count of code + chat history
+ * Claude's context is ~200k tokens, roughly 800k characters
+ * @returns {number} - Estimated percentage (0-100)
+ */
+function estimateContextPercentage() {
+  const MAX_CONTEXT_CHARS = 800000; // ~200k tokens
+
+  let totalChars = 0;
+
+  // Count current code
+  if (currentCode) {
+    totalChars += currentCode.length;
+  }
+
+  // Count chat history
+  messageHistory.forEach(msg => {
+    if (msg.content) {
+      totalChars += msg.content.length;
+    }
+  });
+
+  const percentage = Math.round((totalChars / MAX_CONTEXT_CHARS) * 100);
+  return Math.min(percentage, 100); // Cap at 100%
+}
+
+/**
  * Update status bar with model statistics
  * @param {number} volume - Volume in cubic mm (from Build123d)
  */
@@ -466,8 +537,11 @@ function updateModelStats(volume) {
   const faceCountStr = faceCount.toLocaleString();
   const volumeStr = volumeCm3.toFixed(2);
 
-  statusStats.textContent = `Faces: ${faceCountStr} | Volume: ${volumeStr} cm³`;
-  console.log(`[Stats] Updated: Faces=${faceCount}, Volume=${volumeStr} cm³`);
+  // Get context estimate
+  const contextPercent = estimateContextPercentage();
+
+  statusStats.textContent = `Faces: ${faceCountStr} | Volume: ${volumeStr} cm³ | Context: ~${contextPercent}%`;
+  console.log(`[Stats] Updated: Faces=${faceCount}, Volume=${volumeStr} cm³, Context=${contextPercent}%`);
 }
 
 /**
@@ -512,11 +586,15 @@ function applyFeatureColors() {
 }
 
 // Load glTF mesh from file path
-function loadMesh(path, volume = 0) {
+// colors: optional object mapping feature index to hex color (e.g., {0: "#ff0000", 1: "#0000ff"})
+function loadMesh(path, volume = 0, colors = null) {
   setProcessing('python');
 
   // Store volume for stats display
   currentVolume = volume;
+
+  // Store colors to apply after load
+  const sourceColors = colors;
 
   // Clear hover state when loading new mesh
   if (hoveredMesh) {
@@ -648,7 +726,86 @@ function loadMesh(path, volume = 0) {
       scene.add(loadedMesh);
       currentMesh = loadedMesh;
 
-      // Apply feature color overrides if any
+      // Apply source colors from Build123d code (if provided)
+      // Uses spatial clustering since Build123d splits shapes into multiple meshes
+      if (sourceColors && Object.keys(sourceColors).length > 0) {
+        const colorKeys = Object.keys(sourceColors);
+        const numColors = colorKeys.length;
+        console.log(`[LoadMesh] Applying ${numColors} source color(s) via spatial clustering`);
+
+        // Collect all meshes with their bounding box centers
+        const meshes = [];
+        loadedMesh.traverse((child) => {
+          if (child.isMesh) {
+            const box = new THREE.Box3().setFromObject(child);
+            const center = box.getCenter(new THREE.Vector3());
+            meshes.push({
+              mesh: child,
+              centerX: center.x,
+              centerY: center.y,
+              centerZ: center.z
+            });
+          }
+        });
+
+        console.log(`[LoadMesh] Found ${meshes.length} meshes to color`);
+
+        if (meshes.length === 0) {
+          console.log('[LoadMesh] No meshes found');
+        } else if (numColors === 1) {
+          // Single color: apply to all meshes
+          const hexColor = sourceColors[colorKeys[0]];
+          console.log(`[LoadMesh] Single color mode: applying ${hexColor} to all meshes`);
+          meshes.forEach(({ mesh }) => {
+            if (mesh.material) {
+              mesh.material = mesh.material.clone();
+            }
+            mesh.material.color.set(hexColor);
+          });
+        } else {
+          // Multiple colors: cluster by X position (for "side by side" arrangements)
+          // Sort meshes by X coordinate
+          meshes.sort((a, b) => a.centerX - b.centerX);
+
+          // Find natural clustering point(s) - look for largest gap in X positions
+          const gaps = [];
+          for (let i = 0; i < meshes.length - 1; i++) {
+            gaps.push({
+              index: i,
+              gap: meshes[i + 1].centerX - meshes[i].centerX
+            });
+          }
+
+          // Sort gaps by size (largest first) and take top (numColors - 1) gaps
+          gaps.sort((a, b) => b.gap - a.gap);
+          const splitIndices = gaps.slice(0, numColors - 1).map(g => g.index).sort((a, b) => a - b);
+
+          console.log(`[LoadMesh] Split indices for ${numColors} groups:`, splitIndices);
+
+          // Assign color groups
+          let colorIndex = 0;
+          let nextSplitIdx = 0;
+
+          meshes.forEach(({ mesh }, i) => {
+            // Check if we've passed a split point
+            if (nextSplitIdx < splitIndices.length && i > splitIndices[nextSplitIdx]) {
+              colorIndex++;
+              nextSplitIdx++;
+            }
+
+            const hexColor = sourceColors[colorIndex] || sourceColors[String(colorIndex)];
+            if (hexColor) {
+              if (mesh.material) {
+                mesh.material = mesh.material.clone();
+              }
+              mesh.material.color.set(hexColor);
+              console.log(`[LoadMesh] Mesh ${i} (X=${mesh.userData.centerX?.toFixed(1) || 'N/A'}) -> color group ${colorIndex} (${hexColor})`);
+            }
+          });
+        }
+      }
+
+      // Apply feature color overrides if any (user-set colors override source colors)
       applyFeatureColors();
 
       // Apply current render mode
@@ -1350,7 +1507,7 @@ async function refreshContext() {
 
     // Show status
     statusText.textContent = 'Refreshing context...';
-    statusText.style.color = '#4a9eff';
+    statusText.style.color = '#ffffff';
 
     // Filter chat history - exclude error messages
     const cleanedHistory = messageHistory
@@ -2257,8 +2414,9 @@ async function sendChatMessage() {
         // Success: code executed, mesh generated
         console.log('[Chat] Success! Loading mesh:', result.meshPath);
         console.log('[Chat] Volume:', result.volume, 'mm³');
+        console.log('[Chat] Colors:', result.colors || 'none');
         // Load the mesh (this will trigger Phase 2: "Building model...")
-        loadMesh(result.meshPath, result.volume);
+        loadMesh(result.meshPath, result.volume, result.colors);
       }
     } else {
       // Failure: show error

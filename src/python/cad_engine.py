@@ -62,20 +62,46 @@ def execute_build123d(code):
 def extract_colors(code):
     """
     Extract color assignments from Build123d code.
-    Returns a dictionary mapping feature names to colors.
+    Returns a dictionary mapping feature indices to hex colors.
+
+    The function:
+    1. Extracts variable_name -> color mappings from .color = Color(...) assignments
+    2. Finds the order of parts in Compound([...]) or part = variable assignments
+    3. Returns {0: "#ff0000", 1: "#0000ff", ...} by index
 
     Example:
-        base.color = Color("blue") -> {"base": "#0000ff"}
-        hole.color = Color(1, 0, 0) -> {"hole": "#ff0000"}
+        cube.color = Color("blue")
+        sphere.color = Color(1, 0, 0)
+        part = Compound([cube, sphere])
+        -> {0: "#0000ff", 1: "#ff0000"}
     """
-    colors = {}
+    # Named color to hex mapping
+    color_name_to_hex = {
+        'red': '#ff0000',
+        'green': '#00ff00',
+        'blue': '#0000ff',
+        'yellow': '#ffff00',
+        'cyan': '#00ffff',
+        'magenta': '#ff00ff',
+        'white': '#ffffff',
+        'black': '#000000',
+        'orange': '#ff9900',
+        'purple': '#800080',
+        'pink': '#ffc0cb',
+        'gray': '#808080',
+        'grey': '#808080',
+    }
+
+    # Step 1: Extract variable -> color mappings
+    var_colors = {}
 
     # Pattern: variable_name.color = Color("color_name")
     named_pattern = r'(\w+)\.color\s*=\s*Color\s*\(\s*["\'](\w+)["\']\s*\)'
     for match in re.finditer(named_pattern, code):
         var_name = match.group(1)
         color_name = match.group(2).lower()
-        colors[var_name] = color_name
+        hex_color = color_name_to_hex.get(color_name, '#808080')
+        var_colors[var_name] = hex_color
 
     # Pattern: variable_name.color = Color(r, g, b)
     rgb_pattern = r'(\w+)\.color\s*=\s*Color\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)'
@@ -84,13 +110,90 @@ def extract_colors(code):
         r = float(match.group(2))
         g = float(match.group(3))
         b = float(match.group(4))
-        # Convert to hex
         hex_color = '#{:02x}{:02x}{:02x}'.format(
             int(r * 255), int(g * 255), int(b * 255)
         )
-        colors[var_name] = hex_color
+        var_colors[var_name] = hex_color
 
-    return colors
+    # DEBUG: Log var_colors found
+    print(f"[DEBUG extract_colors] var_colors found: {var_colors}", file=sys.stderr)
+
+    if not var_colors:
+        return {}
+
+    # Step 2: Find the order of SHAPE CREATIONS in the code
+    # This determines the order meshes appear in the glTF file
+    # Pattern: var = ShapeConstructor(...) where ShapeConstructor is a Build123d shape
+    shape_constructors = [
+        'Box', 'Sphere', 'Cylinder', 'Cone', 'Torus', 'Wedge',
+        'CounterBoreHole', 'CounterSinkHole', 'Hole',
+        'Extrude', 'Revolve', 'Sweep', 'Loft',
+        'Circle', 'Ellipse', 'Rectangle', 'Polygon', 'RegularPolygon',
+        'Text', 'Arc', 'Line', 'Spline', 'Helix',
+        'fillet', 'chamfer', 'shell', 'offset',
+        'add', 'cut', 'intersect',
+    ]
+    shape_pattern = r'(\w+)\s*=\s*(' + '|'.join(shape_constructors) + r')\s*\('
+
+    # Find all shape creations in order they appear in code
+    shape_order = []
+    for match in re.finditer(shape_pattern, code, re.IGNORECASE):
+        var_name = match.group(1)
+        shape_type = match.group(2)
+        print(f"[DEBUG extract_colors] Found shape: {var_name} = {shape_type}(...)", file=sys.stderr)
+        if var_name not in shape_order:  # Avoid duplicates from reassignment
+            shape_order.append(var_name)
+
+    # DEBUG: Log shape_order
+    print(f"[DEBUG extract_colors] shape_order: {shape_order}", file=sys.stderr)
+
+    # Step 3: Map colors to indices based on shape creation order
+    if shape_order:
+        indexed_colors = {}
+        for idx, var_name in enumerate(shape_order):
+            if var_name in var_colors:
+                indexed_colors[idx] = var_colors[var_name]
+                print(f"[DEBUG extract_colors] Mapping: index {idx} ({var_name}) -> {var_colors[var_name]}", file=sys.stderr)
+
+        if indexed_colors:
+            print(f"[DEBUG extract_colors] FINAL indexed_colors: {indexed_colors}", file=sys.stderr)
+            return indexed_colors
+
+    # Step 4: Check for Compound([...]) as fallback
+    # Pattern: Compound([var1, var2, ...]) or Compound(children=[var1, var2, ...])
+    compound_pattern = r'Compound\s*\(\s*(?:children\s*=\s*)?\[([^\]]+)\]'
+    compound_match = re.search(compound_pattern, code)
+
+    if compound_match:
+        # Extract variable names from the list
+        parts_str = compound_match.group(1)
+        # Split by comma and strip whitespace
+        part_names = [name.strip() for name in parts_str.split(',') if name.strip()]
+
+        # Build index -> color mapping
+        indexed_colors = {}
+        for idx, part_name in enumerate(part_names):
+            if part_name in var_colors:
+                indexed_colors[idx] = var_colors[part_name]
+
+        return indexed_colors
+
+    # Step 5: If no shape order found, check for simple part = variable (single object)
+    # Pattern: part = variable_name (at end or followed by newline/comment)
+    single_part_pattern = r'part\s*=\s*(\w+)\s*(?:#.*)?$'
+    single_match = re.search(single_part_pattern, code, re.MULTILINE)
+
+    if single_match:
+        var_name = single_match.group(1)
+        if var_name in var_colors:
+            return {0: var_colors[var_name]}
+
+    # Final fallback: return colors by order they appear in code
+    indexed_colors = {}
+    for idx, (var_name, color) in enumerate(var_colors.items()):
+        indexed_colors[idx] = color
+
+    return indexed_colors
 
 
 def export_mesh(part):

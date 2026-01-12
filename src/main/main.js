@@ -200,12 +200,15 @@ ipcMain.handle('send-chat-message', async (event, { message, currentCode, histor
             newModel: parsed.newModel
           };
         }
+        // DEBUG: Log colors being passed to renderer
+        console.log('[DEBUG Main] Colors from Python:', JSON.stringify(execResult.colors));
         return {
           success: true,
           code: parsed.code,
           explanation: parsed.explanation,
           meshPath: execResult.mesh_path,
           volume: execResult.volume, // Pass volume from Python
+          colors: execResult.colors, // Pass colors from Python (index -> hex)
           newModel: parsed.newModel
         };
       }
