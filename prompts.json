@@ -38,7 +38,7 @@
   {
     "id": "p6-07",
     "title": "Per-Feature Click Detection",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 7: Per-Feature Click Detection\n\n## CONTEXT\nWhen user clicks on model, identify which specific mesh (feature) was clicked, not just the parent group.\n\n## CURRENT BEHAVIOR\nRaycaster returns intersect.object which is the specific mesh hit. We then walk up to currentMesh parent. For feature detection, we want to keep track of which child mesh was clicked.\n\n## REQUIREMENTS\n1. On click, identify the specific child mesh (feature)\n2. Store reference to clicked feature: `selectedFeature`\n3. Assign feature indices when loading model (traverse order)\n4. Store feature index with click info\n5. Log: \"[Selection] Feature 3 selected\"\n\n## IMPLEMENTATION\n```javascript\n// On mesh load, assign feature indices\nlet featureIndex = 0;\nloadedMesh.traverse((child) => {\n  if (child.isMesh) {\n    child.userData.featureIndex = featureIndex++;\n  }\n});\n\n// On click\nlet selectedFeature = null;\n// ... in click handler:\nif (meshIntersects.length > 0) {\n  const hitMesh = meshIntersects[0].object;\n  selectedFeature = hitMesh;\n  console.log(`[Selection] Feature ${hitMesh.userData.featureIndex} selected`);\n}\n```\n\n## FILES TO MODIFY\n- src/renderer/renderer.js\n\n## EXPECTED RESULT\n1. Load a multi-body model\n2. Click on different parts\n3. Console shows which feature index was clicked\n4. selectedFeature variable holds reference to clicked mesh\n\nProvide a plan before implementing code."
   },
   {

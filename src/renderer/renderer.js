@@ -131,7 +131,6 @@ let clickMarkerTimeout = null;
 
 // Hover state tracking
 let hoveredMesh = null;
-let originalMaterial = null;
 let isDragging = false;
 let lastHoverCheck = 0;
 const hoverCheckInterval = 33; // ~30fps (33ms)
@@ -2096,34 +2095,58 @@ Object.defineProperty(window, 'selectedFeature', {
 // ============================================================
 
 /**
- * Apply highlight effect to a mesh
+ * Lighten a color by increasing its HSL lightness
+ * @param {THREE.Color} color - The color to lighten
+ * @param {number} amount - Amount to increase lightness (0-1)
+ * @returns {THREE.Color} - New lightened color
  */
-function applyHighlight(mesh) {
-  // Store original material properties if not already stored
-  if (!originalMaterial && mesh.material) {
-    originalMaterial = {
-      emissive: mesh.material.emissive.clone(),
-      emissiveIntensity: mesh.material.emissiveIntensity
-    };
-  }
+function lightenColor(color, amount = 0.3) {
+  const hsl = {};
+  color.getHSL(hsl);
+  hsl.l = Math.min(1, hsl.l + amount);
+  return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
+}
 
-  // Apply subtle blue emissive glow (accent color)
-  if (mesh.material) {
-    mesh.material.emissive.setHex(0x4a9eff);
-    mesh.material.emissiveIntensity = 0.3;
+/**
+ * Apply per-feature highlight effect to a mesh
+ * Stores original color and applies lightened version
+ */
+function applyFeatureHighlight(mesh) {
+  if (!mesh.material) return;
+
+  // Store original color in userData
+  mesh.userData.originalColor = mesh.material.color.clone();
+
+  // Apply lightened color
+  mesh.material.color.copy(lightenColor(mesh.userData.originalColor));
+}
+
+/**
+ * Remove per-feature highlight effect from a mesh
+ * Restores original color from userData
+ */
+function removeFeatureHighlight(mesh) {
+  if (!mesh.material) return;
+
+  // Restore original color if stored
+  if (mesh.userData.originalColor) {
+    mesh.material.color.copy(mesh.userData.originalColor);
+    delete mesh.userData.originalColor;
   }
 }
 
 /**
- * Remove highlight effect from a mesh
+ * Apply highlight effect to a mesh (legacy function for compatibility)
+ */
+function applyHighlight(mesh) {
+  applyFeatureHighlight(mesh);
+}
+
+/**
+ * Remove highlight effect from a mesh (legacy function for compatibility)
  */
 function removeHighlight(mesh) {
-  // Restore original material properties
-  if (originalMaterial && mesh.material) {
-    mesh.material.emissive.copy(originalMaterial.emissive);
-    mesh.material.emissiveIntensity = originalMaterial.emissiveIntensity;
-    originalMaterial = null;
-  }
+  removeFeatureHighlight(mesh);
 }
 
 /**
