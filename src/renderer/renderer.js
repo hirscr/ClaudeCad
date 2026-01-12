@@ -143,6 +143,12 @@ let measureVisuals = {
   line: null
 };
 
+// Pulse animation state (for red pulsing during Claude processing)
+let pulseAnimationId = null;
+let originalColors = new Map(); // Map<material, {color: Color, emissive: Color}>
+let isPulsing = false;
+let pulseStartTime = null;
+
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
@@ -234,17 +240,24 @@ const statusText = document.getElementById('status-text');
  */
 function setProcessing(phase) {
   if (phase === 'claude') {
-    // Phase 1: Asking Claude
-    loadingOverlay.classList.remove('hidden');
+    // Phase 1: Asking Claude - use pulse animation instead of spinner
+    loadingOverlay.classList.add('hidden'); // Hide spinner overlay
     statusText.textContent = 'Asking Claude...';
     statusText.style.color = '#888888';
+
+    // Start pulse animation if model exists
+    if (currentMesh) {
+      startPulseAnimation();
+    }
   } else if (phase === 'python') {
-    // Phase 2: Building model
+    // Phase 2: Building model - stop pulse, show spinner
+    stopPulseAnimation(); // Stop pulse if active
     loadingOverlay.classList.remove('hidden');
     statusText.textContent = 'Building model...';
     statusText.style.color = '#888888';
   } else {
-    // Done: Hide loading, reset status
+    // Done: Stop pulse, hide loading, reset status
+    stopPulseAnimation(); // Stop pulse if active
     loadingOverlay.classList.add('hidden');
     statusText.textContent = 'Ready';
     statusText.style.color = '#888888';
@@ -258,6 +271,120 @@ function showLoading() {
 
 function hideLoading() {
   setProcessing(null);
+}
+
+// ============================================================
+// PULSE ANIMATION (Red pulsing during Claude processing)
+// ============================================================
+
+/**
+ * Start pulsing red animation on the current mesh
+ */
+function startPulseAnimation() {
+  // Only animate if we have a mesh
+  if (!currentMesh) {
+    console.log('[Pulse] No mesh to animate');
+    return;
+  }
+
+  // Don't start if already pulsing
+  if (isPulsing) {
+    console.log('[Pulse] Already pulsing');
+    return;
+  }
+
+  console.log('[Pulse] Starting pulse animation');
+  isPulsing = true;
+  pulseStartTime = performance.now();
+
+  // Store original colors for all materials in the mesh
+  originalColors.clear();
+  currentMesh.traverse((child) => {
+    if (child.isMesh && child.material) {
+      // Store original color and emissive
+      originalColors.set(child.material, {
+        color: child.material.color.clone(),
+        emissive: child.material.emissive.clone(),
+        emissiveIntensity: child.material.emissiveIntensity
+      });
+    }
+  });
+
+  // Define pulse colors
+  const dimRed = new THREE.Color(0x661111);    // Dark red
+  const lightRed = new THREE.Color(0xaa3333);  // Lighter red
+
+  // Animation loop
+  function animatePulse() {
+    if (!isPulsing) {
+      return; // Stop animation if flag is cleared
+    }
+
+    // Calculate elapsed time and pulse phase (0 to 1)
+    const elapsed = performance.now() - pulseStartTime;
+    const pulseDuration = 1500; // 1.5 seconds per cycle
+    const phase = (elapsed % pulseDuration) / pulseDuration;
+
+    // Sine wave interpolation for smooth pulsing (0 -> 1 -> 0)
+    const t = (Math.sin(phase * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+
+    // Interpolate between dim and light red
+    const currentColor = new THREE.Color();
+    currentColor.lerpColors(dimRed, lightRed, t);
+
+    // Apply to all mesh materials
+    if (currentMesh) {
+      currentMesh.traverse((child) => {
+        if (child.isMesh && child.material) {
+          child.material.color.copy(currentColor);
+        }
+      });
+    } else {
+      // Mesh was removed - stop animation
+      stopPulseAnimation();
+      return;
+    }
+
+    // Continue animation
+    pulseAnimationId = requestAnimationFrame(animatePulse);
+  }
+
+  // Start the animation loop
+  animatePulse();
+}
+
+/**
+ * Stop pulsing animation and restore original colors
+ */
+function stopPulseAnimation() {
+  if (!isPulsing) {
+    return; // Not pulsing, nothing to stop
+  }
+
+  console.log('[Pulse] Stopping pulse animation');
+  isPulsing = false;
+
+  // Cancel animation frame
+  if (pulseAnimationId !== null) {
+    cancelAnimationFrame(pulseAnimationId);
+    pulseAnimationId = null;
+  }
+
+  // Restore original colors
+  if (currentMesh) {
+    currentMesh.traverse((child) => {
+      if (child.isMesh && child.material && originalColors.has(child.material)) {
+        const original = originalColors.get(child.material);
+        child.material.color.copy(original.color);
+        child.material.emissive.copy(original.emissive);
+        child.material.emissiveIntensity = original.emissiveIntensity;
+      }
+    });
+  }
+
+  // Clear stored colors
+  originalColors.clear();
+  pulseStartTime = null;
 }
 
 // Load glTF mesh from file path
@@ -403,6 +530,9 @@ function loadMesh(path) {
  * Clear the viewport (remove current mesh)
  */
 function clearViewport() {
+  // Stop pulse animation if active
+  stopPulseAnimation();
+
   // Clear hover state
   if (hoveredMesh) {
     removeHighlight(hoveredMesh);
@@ -856,6 +986,8 @@ window.loadMesh = loadMesh;
 window.executeCode = executeCode;
 window.toggleMeasureMode = toggleMeasureMode;
 window.clearMeasurement = clearMeasurement;
+window.startPulseAnimation = startPulseAnimation;
+window.stopPulseAnimation = stopPulseAnimation;
 
 // ============================================================
 // WINDOW TITLE MANAGEMENT
