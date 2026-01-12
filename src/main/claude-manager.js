@@ -160,7 +160,8 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
   prompt += '2. Include a brief explanation of what you changed/created\n';
   prompt += '3. Ensure all measurements are in millimeters\n';
   prompt += '4. The code should be complete and executable\n';
-  prompt += '5. Do NOT include any export lines (export_stl, export_gltf, etc.) - the system handles export automatically\n\n';
+  prompt += '5. Do NOT include any export lines (export_stl, export_gltf, etc.) - the system handles export automatically\n';
+  prompt += '6. If creating an entirely NEW model (not modifying the existing one), include exactly `NEW_MODEL: true` on its own line in your response\n\n';
 
   // User's current request
   prompt += '# User Request\n\n';
@@ -184,14 +185,21 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
 }
 
 /**
- * Parse Claude's response to extract Python code and explanation.
+ * Parse Claude's response to extract Python code, explanation, and flags.
  *
  * @param {string} responseText - The raw response from Claude CLI
- * @returns {Object} { code: string|null, explanation: string, raw: string }
+ * @returns {Object} { code: string|null, explanation: string, raw: string, newModel: boolean }
  */
 function parseResponse(responseText) {
   // Store the original raw response
   const raw = responseText;
+
+  // Check for NEW_MODEL flag
+  const newModelRegex = /^NEW_MODEL:\s*true\s*$/im;
+  const newModel = newModelRegex.test(responseText);
+  if (newModel) {
+    console.log('[ClaudeManager] NEW_MODEL flag detected - this is a new model');
+  }
 
   // Regex to match Python code blocks: ```python\n...\n```
   const codeBlockRegex = /```python\n([\s\S]*?)```/g;
@@ -217,19 +225,143 @@ function parseResponse(responseText) {
     }
 
     // Extract explanation (everything outside code blocks)
-    // Remove all code blocks from the response
-    explanation = responseText.replace(codeBlockRegex, '').trim();
+    // Remove all code blocks and NEW_MODEL flag from the response
+    explanation = responseText
+      .replace(codeBlockRegex, '')
+      .replace(newModelRegex, '')
+      .trim();
   }
 
   return {
     code,
     explanation,
+    newModel,
     raw
   };
+}
+
+/**
+ * Clear Claude CLI context by sending /clear command.
+ * @returns {Promise<void>}
+ */
+function clearContext() {
+  return new Promise((resolve, reject) => {
+    console.log('[ClaudeManager] Clearing Claude context...');
+
+    const process = spawn('claude', ['--print'], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    // Send /clear command
+    process.stdin.write('/clear');
+    process.stdin.end();
+
+    let timeoutId = setTimeout(() => {
+      console.error('[ClaudeManager] Clear context timeout');
+      process.kill();
+      reject(new Error('Clear context timeout'));
+    }, 10000);
+
+    process.on('exit', (code) => {
+      clearTimeout(timeoutId);
+      if (code === 0) {
+        console.log('[ClaudeManager] Context cleared successfully');
+        resolve();
+      } else {
+        // Even if exit code is non-zero, /clear might have worked
+        console.log('[ClaudeManager] Clear command completed (exit code:', code, ')');
+        resolve();
+      }
+    });
+
+    process.on('error', (err) => {
+      clearTimeout(timeoutId);
+      console.error('[ClaudeManager] Clear context error:', err);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Build and send a continuation prompt to re-establish context.
+ * This doesn't expect code in response - just establishes state.
+ *
+ * @param {string} currentCode - The current Build123d code
+ * @param {Array} cleanedHistory - Chat history without errors/failures
+ * @returns {Promise<void>}
+ */
+function sendContinuationPrompt(currentCode, cleanedHistory = []) {
+  return new Promise((resolve, reject) => {
+    console.log('[ClaudeManager] Sending continuation prompt...');
+
+    let prompt = '# Context Restoration\n\n';
+    prompt += 'You are a CAD assistant that generates Build123d Python code.\n\n';
+
+    // Current model code
+    if (currentCode && currentCode.trim()) {
+      prompt += '# Current Model Code (Ground Truth)\n\n';
+      prompt += '```python\n';
+      prompt += currentCode;
+      prompt += '\n```\n\n';
+    } else {
+      prompt += '# Current Model\n\nNo model currently loaded.\n\n';
+    }
+
+    // Cleaned chat history
+    if (cleanedHistory && cleanedHistory.length > 0) {
+      prompt += '# Previous Conversation\n\n';
+      for (const msg of cleanedHistory) {
+        prompt += `**${msg.role}:** ${msg.content}\n\n`;
+      }
+    }
+
+    prompt += '# Status\n\n';
+    prompt += 'Context has been refreshed. The code above is the current state. Await next user command.\n';
+
+    const process = spawn('claude', ['--print'], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    process.stdin.write(prompt);
+    process.stdin.end();
+
+    let timeoutId = setTimeout(() => {
+      console.error('[ClaudeManager] Continuation prompt timeout');
+      process.kill();
+      reject(new Error('Continuation prompt timeout'));
+    }, 30000);
+
+    process.on('exit', (code) => {
+      clearTimeout(timeoutId);
+      console.log('[ClaudeManager] Continuation prompt sent (exit code:', code, ')');
+      resolve();
+    });
+
+    process.on('error', (err) => {
+      clearTimeout(timeoutId);
+      console.error('[ClaudeManager] Continuation prompt error:', err);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Refresh Claude context: clear and re-establish with current state.
+ *
+ * @param {string} currentCode - The current Build123d code
+ * @param {Array} cleanedHistory - Chat history without errors/failures
+ * @returns {Promise<void>}
+ */
+async function refreshContext(currentCode, cleanedHistory = []) {
+  await clearContext();
+  await sendContinuationPrompt(currentCode, cleanedHistory);
 }
 
 module.exports = {
   sendPrompt,
   buildPrompt,
-  parseResponse
+  parseResponse,
+  clearContext,
+  sendContinuationPrompt,
+  refreshContext
 };

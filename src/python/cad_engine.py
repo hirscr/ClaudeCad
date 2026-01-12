@@ -135,6 +135,15 @@ def main():
         # Execute the code
         part = execute_build123d(code)
 
+        # Check if geometry is empty (e.g., user said "delete everything")
+        if part.part is None:
+            print(json.dumps({
+                "success": True,
+                "empty": True,
+                "mesh_path": None
+            }))
+            return
+
         # Export to mesh format (part.part is the actual geometry)
         mesh_path = export_mesh(part.part)
 

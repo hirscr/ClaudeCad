@@ -19,7 +19,7 @@ const camera = new THREE.PerspectiveCamera(
   0.01,
   10000
 );
-camera.position.set(70, -70, 50); // Isometric-like view
+camera.position.set(70, 70, 50); // Front-right-top isometric view
 camera.up.set(0, 0, 1); // Z-up orientation
 
 // Renderer setup
@@ -110,6 +110,10 @@ let isDirty = false; // Whether current state has unsaved changes
 
 // Undo state (single-level)
 let previousCode = null;
+let undoneCode = null; // For redo support
+
+// Context reset flag - set after loading a project
+let projectJustLoaded = false;
 
 // Raycaster for click detection and hover
 const raycaster = new THREE.Raycaster();
@@ -155,8 +159,9 @@ function animate() {
 }
 
 // View preset directions (normalized camera direction vectors)
+// Camera position relative to object center - X and Y should point toward camera for front-isometric
 const viewPresets = {
-  isometric: new THREE.Vector3(1, -1, 0.7).normalize(),
+  isometric: new THREE.Vector3(1, 1, 0.7).normalize(), // Front-right-top view
   front: new THREE.Vector3(0, 1, 0),
   back: new THREE.Vector3(0, -1, 0),
   top: new THREE.Vector3(0, 0, 1),
@@ -176,9 +181,33 @@ document.getElementById('view-dropdown').addEventListener('change', (e) => {
   }
 });
 
-// Handle measure button click
+// Handle toolbar button clicks
+document.getElementById('open-button').addEventListener('click', () => {
+  loadProject();
+});
+
+document.getElementById('save-button').addEventListener('click', () => {
+  saveProject();
+});
+
+document.getElementById('undo-button').addEventListener('click', () => {
+  undo();
+});
+
+document.getElementById('redo-button').addEventListener('click', () => {
+  redo();
+});
+
 document.getElementById('measure-button').addEventListener('click', () => {
   toggleMeasureMode();
+});
+
+document.getElementById('refresh-context-button').addEventListener('click', () => {
+  refreshContext();
+});
+
+document.getElementById('export-stl-button').addEventListener('click', () => {
+  exportSTL();
 });
 
 // Handle viewport resize using ResizeObserver
@@ -370,6 +399,114 @@ function loadMesh(path) {
   );
 }
 
+/**
+ * Clear the viewport (remove current mesh)
+ */
+function clearViewport() {
+  // Clear hover state
+  if (hoveredMesh) {
+    removeHighlight(hoveredMesh);
+    hoveredMesh = null;
+  }
+
+  // Clear any active measurements
+  if (measurePointA || measurePointB) {
+    clearMeasurement();
+  }
+  // Exit measure mode if active
+  if (measureMode) {
+    measureMode = false;
+    const measureButton = document.getElementById('measure-button');
+    measureButton.classList.remove('active');
+  }
+
+  // Remove current mesh if exists
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => mat.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+    currentMesh = null;
+    console.log('[Viewport] Mesh cleared');
+  }
+
+  // Also remove test cube if it exists
+  if (testCube) {
+    scene.remove(testCube);
+    testCube.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => mat.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+    testCube = null;
+  }
+}
+
+/**
+ * Clear the entire project (viewport, chat, code, state)
+ * Used for Cmd+X (Clear) command
+ */
+async function clearProject() {
+  // Check for unsaved changes first
+  const canProceed = await checkUnsavedChanges();
+  if (!canProceed) {
+    console.log('[Renderer] Clear canceled - unsaved changes');
+    return;
+  }
+
+  console.log('[Renderer] Clearing project...');
+
+  // Clear viewport
+  clearViewport();
+
+  // Clear click marker
+  clearClickMarker();
+
+  // Clear message history and chat UI
+  messageHistory.length = 0;
+  chatMessagesContainer.innerHTML = '';
+
+  // Reset state
+  currentCode = '';
+  previousCode = null;
+  currentFilePath = null;
+  projectName = 'untitled';
+  isDirty = false;
+  lastClickInfo = null;
+
+  // Clear measure distance display
+  document.getElementById('measure-distance').textContent = '';
+
+  // Update window title
+  updateWindowTitle();
+
+  // Reset status
+  statusText.textContent = 'Project cleared';
+  statusText.style.color = '#4ec9b0';
+
+  setTimeout(() => {
+    statusText.textContent = 'Ready';
+    statusText.style.color = '#888888';
+  }, 2000);
+
+  console.log('[Renderer] Project cleared');
+}
+
+// Expose clearProject for debugging
+window.clearProject = clearProject;
+
 // Fit camera to object with optional direction
 function fitCameraToObject(object, direction = viewPresets.isometric) {
   // Compute bounding box
@@ -436,14 +573,15 @@ async function executeCode(code) {
 }
 
 // ============================================================
-// UNDO FUNCTIONALITY (Single-Level)
+// UNDO/REDO FUNCTIONALITY (Single-Level)
 // ============================================================
 
 /**
- * Save current code state for undo
+ * Save current code state for undo (called before making changes)
  */
 function saveUndo() {
   previousCode = currentCode;
+  undoneCode = null; // Clear redo state when new change is made
   console.log('[Undo] Saved previous state');
 }
 
@@ -451,28 +589,36 @@ function saveUndo() {
  * Undo last change (single-level)
  */
 async function undo() {
-  if (!previousCode) {
+  if (previousCode === null) {
     console.log('[Undo] No previous state to restore');
+    statusText.textContent = 'Nothing to undo';
+    statusText.style.color = '#888888';
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+    }, 1500);
     return;
   }
 
   console.log('[Undo] Restoring previous state...');
 
-  // Store the code to restore
-  const codeToRestore = previousCode;
+  // Store current code for redo
+  undoneCode = currentCode;
 
-  // Clear undo state (single-level only)
-  previousCode = null;
-
-  // Update current code
-  currentCode = codeToRestore;
+  // Restore previous code
+  currentCode = previousCode;
+  previousCode = null; // Clear undo state (single-level)
 
   // Mark as unsaved (dirty)
   isDirty = true;
   updateWindowTitle();
 
-  // Add system message to chat
-  addMessage('assistant', 'Undid last change');
+  // Show status bar message (white text, no chat message)
+  statusText.textContent = 'Undid last change';
+  statusText.style.color = '#ffffff';
+  setTimeout(() => {
+    statusText.textContent = 'Ready';
+    statusText.style.color = '#888888';
+  }, 2000);
 
   // Rebuild model with previous code
   if (currentCode) {
@@ -480,30 +626,78 @@ async function undo() {
       await executeCode(currentCode);
     } catch (err) {
       console.error('[Undo] Failed to execute restored code:', err);
-      addMessage('error', `Failed to restore previous state: ${err.message}`);
+      statusText.textContent = `Undo failed: ${err.message}`;
+      statusText.style.color = '#f44747';
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 3000);
     }
   } else {
     // No code to restore - clear the viewport
-    if (currentMesh) {
-      scene.remove(currentMesh);
-      currentMesh.traverse((child) => {
-        if (child.geometry) child.geometry.dispose();
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach(mat => mat.dispose());
-          } else {
-            child.material.dispose();
-          }
-        }
-      });
-      currentMesh = null;
-      console.log('[Undo] Cleared mesh (restored to empty state)');
-    }
+    clearViewport();
+    hideLoading();
   }
 }
 
-// Expose undo function for debugging
+/**
+ * Redo last undone change (single-level)
+ */
+async function redo() {
+  if (undoneCode === null) {
+    console.log('[Redo] No undone state to restore');
+    statusText.textContent = 'Nothing to redo';
+    statusText.style.color = '#888888';
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+    }, 1500);
+    return;
+  }
+
+  console.log('[Redo] Restoring undone state...');
+
+  // Store current code for undo
+  previousCode = currentCode;
+
+  // Restore undone code
+  currentCode = undoneCode;
+  undoneCode = null; // Clear redo state (single-level)
+
+  // Mark as unsaved (dirty)
+  isDirty = true;
+  updateWindowTitle();
+
+  // Show status bar message (white text, no chat message)
+  statusText.textContent = 'Redid last change';
+  statusText.style.color = '#ffffff';
+  setTimeout(() => {
+    statusText.textContent = 'Ready';
+    statusText.style.color = '#888888';
+  }, 2000);
+
+  // Rebuild model with redone code
+  if (currentCode) {
+    try {
+      await executeCode(currentCode);
+    } catch (err) {
+      console.error('[Redo] Failed to execute redone code:', err);
+      statusText.textContent = `Redo failed: ${err.message}`;
+      statusText.style.color = '#f44747';
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 3000);
+    }
+  } else {
+    // No code - clear the viewport
+    clearViewport();
+    hideLoading();
+  }
+}
+
+// Expose undo/redo functions for debugging
 window.undo = undo;
+window.redo = redo;
 
 // ============================================================
 // MEASURE TOOL
@@ -687,14 +881,109 @@ ipcRenderer.on('request-dirty-state', () => {
 // IPC handler: main process requests save before close
 ipcRenderer.on('save-and-close', async () => {
   await saveProject();
-  // Tell main to proceed with close
-  ipcRenderer.send('proceed-with-close');
+  // Only proceed with close if save succeeded (isDirty will be false)
+  // If user canceled save dialog, isDirty stays true - don't close
+  if (!isDirty) {
+    ipcRenderer.send('proceed-with-close');
+  }
 });
 
 // IPC handler: force close without saving
 ipcRenderer.on('force-close', () => {
   ipcRenderer.send('proceed-with-close');
 });
+
+// IPC handlers for menu commands (Electron menu sends these)
+ipcRenderer.on('menu-new', () => {
+  clearProject();
+});
+
+ipcRenderer.on('menu-open', () => {
+  loadProject();
+});
+
+ipcRenderer.on('menu-save', () => {
+  saveProject();
+});
+
+ipcRenderer.on('menu-save-as', () => {
+  saveProjectAs();
+});
+
+ipcRenderer.on('menu-export-stl', () => {
+  exportSTL();
+});
+
+ipcRenderer.on('menu-undo', () => {
+  undo();
+});
+
+ipcRenderer.on('menu-redo', () => {
+  redo();
+});
+
+ipcRenderer.on('menu-refresh-context', () => {
+  refreshContext();
+});
+
+// ============================================================
+// REFRESH CONTEXT
+// ============================================================
+
+/**
+ * Refresh Claude's context by clearing and re-establishing state.
+ * Filters out error messages from history.
+ */
+async function refreshContext() {
+  try {
+    console.log('[Renderer] Refreshing Claude context...');
+
+    // Show status
+    statusText.textContent = 'Refreshing context...';
+    statusText.style.color = '#4a9eff';
+
+    // Filter chat history - exclude error messages
+    const cleanedHistory = messageHistory
+      .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+      .map(msg => ({ role: msg.role, content: msg.content }));
+
+    console.log('[Renderer] Cleaned history entries:', cleanedHistory.length);
+
+    // Call IPC to refresh context
+    const result = await ipcRenderer.invoke('refresh-context', {
+      currentCode,
+      cleanedHistory
+    });
+
+    if (result.success) {
+      console.log('[Renderer] Context refreshed successfully');
+      statusText.textContent = 'Context refreshed';
+      statusText.style.color = '#dcdcaa'; // Yellow for visibility
+    } else {
+      console.error('[Renderer] Context refresh failed:', result.error);
+      statusText.textContent = `Refresh failed: ${result.error}`;
+      statusText.style.color = '#f44747';
+    }
+
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }, 2000);
+
+  } catch (err) {
+    console.error('[Renderer] Error in refreshContext:', err);
+    statusText.textContent = `Error: ${err.message}`;
+    statusText.style.color = '#f44747';
+
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }, 3000);
+  }
+}
+
+// Expose for debugging
+window.refreshContext = refreshContext;
 
 // ============================================================
 // SAVE/LOAD PROJECT
@@ -767,9 +1056,9 @@ async function saveProject() {
       console.log('[Renderer] Project saved successfully to:', result.filePath);
       console.log('[Renderer] Project name:', projectName);
 
-      // Show success feedback in status bar
+      // Show success feedback in status bar (yellow for visibility)
       statusText.textContent = 'Project saved';
-      statusText.style.color = '#4ec9b0'; // Success color
+      statusText.style.color = '#dcdcaa'; // Yellow/warning color for visibility
 
       setTimeout(() => {
         statusText.textContent = 'Ready';
@@ -804,6 +1093,186 @@ async function saveProject() {
 
 // Expose for debugging
 window.saveProject = saveProject;
+
+/**
+ * Save the current project to a new .cc file (Save As)
+ */
+async function saveProjectAs() {
+  // Temporarily clear currentFilePath to force "Save As" dialog
+  const previousPath = currentFilePath;
+  currentFilePath = null;
+
+  try {
+    await saveProject();
+  } finally {
+    // If save was canceled, restore previous path
+    if (currentFilePath === null) {
+      currentFilePath = previousPath;
+    }
+  }
+}
+
+// Expose for debugging
+window.saveProjectAs = saveProjectAs;
+
+/**
+ * Load a project from a .cc file or .md prompt file
+ */
+async function loadProject() {
+  try {
+    console.log('[Renderer] Loading project...');
+
+    // Check for unsaved changes first
+    const canProceed = await checkUnsavedChanges();
+    if (!canProceed) {
+      console.log('[Renderer] Load canceled - unsaved changes');
+      return;
+    }
+
+    // Call IPC to open file dialog and read file
+    const result = await ipcRenderer.invoke('load-project');
+
+    if (result.canceled) {
+      console.log('[Renderer] Load canceled by user');
+      return;
+    }
+
+    if (!result.success) {
+      console.error('[Renderer] Load failed:', result.error);
+      statusText.textContent = `Load failed: ${result.error}`;
+      statusText.style.color = '#f44747';
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 3000);
+      return;
+    }
+
+    // Handle prompt file (.md)
+    if (result.isPrompt) {
+      console.log('[Renderer] Loading prompt file');
+
+      // Put prompt content into chat input
+      chatInput.value = result.promptContent;
+      chatInput.focus();
+
+      statusText.textContent = 'Prompt loaded - press Enter to send';
+      statusText.style.color = '#4ec9b0';
+
+      setTimeout(() => {
+        statusText.textContent = 'Ready';
+        statusText.style.color = '#888888';
+      }, 3000);
+      return;
+    }
+
+    // Handle project file (.cc)
+    const projectData = result.projectData;
+
+    // Clear existing state
+    clearMeasurement();
+    clearClickMarker();
+    if (measureMode) {
+      measureMode = false;
+      document.getElementById('measure-button').classList.remove('active');
+    }
+
+    // Clear message history and chat UI
+    messageHistory.length = 0;
+    chatMessagesContainer.innerHTML = '';
+
+    // Restore chat history
+    if (projectData.chat && Array.isArray(projectData.chat)) {
+      projectData.chat.forEach(msg => {
+        // Add to history
+        messageHistory.push({
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date(msg.timestamp)
+        });
+
+        // Add to UI (simplified - just add the message element)
+        const messageEl = document.createElement('div');
+        messageEl.className = `chat-message ${msg.role}`;
+
+        const contentEl = document.createElement('div');
+        contentEl.className = 'message-content';
+        contentEl.textContent = msg.content;
+        messageEl.appendChild(contentEl);
+
+        const timestampEl = document.createElement('div');
+        timestampEl.className = 'message-timestamp';
+        timestampEl.textContent = formatTimestamp(new Date(msg.timestamp));
+        messageEl.appendChild(timestampEl);
+
+        chatMessagesContainer.appendChild(messageEl);
+      });
+    }
+
+    // Update state
+    currentCode = projectData.code || '';
+    currentFilePath = result.filePath;
+    projectName = projectData.name || 'untitled';
+    previousCode = null; // Clear undo state
+    undoneCode = null; // Clear redo state
+    isDirty = false;
+    projectJustLoaded = true; // Flag to inject context on next message
+
+    // Update window title
+    updateWindowTitle();
+
+    // Rebuild model if there's code
+    if (currentCode && currentCode.trim()) {
+      try {
+        await executeCode(currentCode);
+      } catch (err) {
+        console.error('[Renderer] Failed to rebuild model:', err);
+        addMessage('error', `Failed to rebuild model: ${err.message}`);
+      }
+    } else {
+      // No code - clear viewport
+      if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+        currentMesh = null;
+      }
+    }
+
+    console.log('[Renderer] Project loaded successfully:', projectName);
+
+    statusText.textContent = 'Project loaded';
+    statusText.style.color = '#4ec9b0';
+
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }, 2000);
+
+  } catch (err) {
+    console.error('[Renderer] Error in loadProject:', err);
+
+    statusText.textContent = `Error: ${err.message}`;
+    statusText.style.color = '#f44747';
+
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }, 3000);
+  }
+}
+
+// Expose for debugging
+window.loadProject = loadProject;
 
 // ============================================================
 // EXPORT STL
@@ -918,6 +1387,27 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
     e.preventDefault(); // Prevent browser default
     exportSTL();
+    return;
+  }
+
+  // Cmd+O / Ctrl+O: Open project
+  if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+    e.preventDefault(); // Prevent browser open dialog
+    loadProject();
+    return;
+  }
+
+  // Cmd+Shift+K / Ctrl+Shift+K: Clear project
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    clearProject();
+    return;
+  }
+
+  // Cmd+Shift+Z / Ctrl+Shift+Z: Redo last undone change
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault(); // Prevent browser redo
+    redo();
     return;
   }
 
@@ -1297,15 +1787,23 @@ async function sendChatMessage() {
     // Clear click marker when sending
     clearClickMarker();
 
+    // If project was just loaded, prepend context note to help Claude understand current state
+    let messageToSend = message;
+    if (projectJustLoaded && currentCode) {
+      messageToSend = `[Note: A project was just loaded. The current model code shown above is the ground truth - ignore any conflicting context from chat history.]\n\n${message}`;
+      projectJustLoaded = false; // Clear flag after first message
+      console.log('[Chat] Injected context reset note for post-load message');
+    }
+
     console.log('[Chat] Sending to Claude via IPC...');
-    console.log('[Chat] Message:', message);
+    console.log('[Chat] Message:', messageToSend);
     console.log('[Chat] Current code length:', currentCode.length);
     console.log('[Chat] History entries:', history.length);
     console.log('[Chat] Click info:', clickInfo ? 'included' : 'none');
 
     // Call IPC
     const result = await ipcRenderer.invoke('send-chat-message', {
-      message,
+      message: messageToSend,
       currentCode,
       history,
       clickInfo
@@ -1320,11 +1818,15 @@ async function sendChatMessage() {
     console.log('[Chat] Received result:', result);
 
     if (result.success) {
-      // Success: code executed, mesh generated
-      console.log('[Chat] Success! Loading mesh:', result.meshPath);
-
       // Save current code for undo before updating
       saveUndo();
+
+      // If this is a new model, clear the file path so next save prompts for filename
+      if (result.newModel) {
+        console.log('[Chat] New model detected - clearing file path for Save As');
+        currentFilePath = null;
+        projectName = 'untitled';
+      }
 
       // Update current code
       currentCode = result.code;
@@ -1336,8 +1838,17 @@ async function sendChatMessage() {
       // Add assistant message
       addMessage('assistant', result.explanation);
 
-      // Load the mesh (this will trigger Phase 2: "Building model...")
-      loadMesh(result.meshPath);
+      // Check if result is empty (no geometry produced)
+      if (result.empty) {
+        console.log('[Chat] Empty geometry result - clearing viewport');
+        clearViewport();
+        setProcessing(null);
+      } else {
+        // Success: code executed, mesh generated
+        console.log('[Chat] Success! Loading mesh:', result.meshPath);
+        // Load the mesh (this will trigger Phase 2: "Building model...")
+        loadMesh(result.meshPath);
+      }
     } else {
       // Failure: show error
       console.error('[Chat] Failed:', result.error);

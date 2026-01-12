@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const pythonManager = require('./python-manager');
@@ -154,47 +154,101 @@ ipcMain.handle('send-chat-message', async (event, { message, currentCode, histor
     console.log('[Main] History length:', history?.length || 0);
     console.log('[Main] Click info:', clickInfo ? 'present' : 'none');
 
-    // Send prompt to Claude
-    const rawResponse = await claudeManager.sendPrompt(message, currentCode, history, clickInfo);
-    console.log('[Main] Claude response received, length:', rawResponse.length);
+    // Track retry state
+    let attemptCount = 0;
+    const maxAttempts = 2; // Original + 1 retry
+    let lastError = null;
+    let currentMessage = message;
 
-    // Parse response
-    const parsed = claudeManager.parseResponse(rawResponse);
-    console.log('[Main] Parsed code:', parsed.code ? `${parsed.code.length} chars` : 'none');
-    console.log('[Main] Explanation:', parsed.explanation.substring(0, 100));
+    while (attemptCount < maxAttempts) {
+      attemptCount++;
+      console.log(`[Main] Attempt ${attemptCount}/${maxAttempts}`);
 
-    // If code exists, execute it
-    if (parsed.code) {
+      // Send prompt to Claude
+      const rawResponse = await claudeManager.sendPrompt(currentMessage, currentCode, history, clickInfo);
+      console.log('[Main] Claude response received, length:', rawResponse.length);
+
+      // Parse response
+      const parsed = claudeManager.parseResponse(rawResponse);
+      console.log('[Main] Parsed code:', parsed.code ? `${parsed.code.length} chars` : 'none');
+      console.log('[Main] Explanation:', parsed.explanation.substring(0, 100));
+
+      // If no code generated, return explanation only
+      if (!parsed.code) {
+        console.log('[Main] No code in response, returning explanation only');
+        return {
+          success: false,
+          explanation: parsed.explanation,
+          error: 'No Python code was generated'
+        };
+      }
+
+      // Execute the code
       console.log('[Main] Executing generated code...');
       const execResult = await pythonManager.execute(parsed.code);
 
       if (execResult.success) {
         console.log('[Main] Code execution successful');
+        // Check if result is empty (no geometry produced)
+        if (execResult.empty) {
+          console.log('[Main] Empty geometry result');
+          return {
+            success: true,
+            empty: true,
+            code: parsed.code,
+            explanation: parsed.explanation,
+            newModel: parsed.newModel
+          };
+        }
         return {
           success: true,
           code: parsed.code,
           explanation: parsed.explanation,
-          meshPath: execResult.mesh_path
-        };
-      } else {
-        console.error('[Main] Code execution failed:', execResult.error);
-        return {
-          success: false,
-          explanation: parsed.explanation,
-          error: `Python execution failed: ${execResult.error}`
+          meshPath: execResult.mesh_path,
+          newModel: parsed.newModel
         };
       }
-    } else {
-      // No code generated - just return explanation
-      console.log('[Main] No code in response, returning explanation only');
-      return {
-        success: false,
-        explanation: parsed.explanation,
-        error: 'No Python code was generated'
-      };
+
+      // Execution failed
+      lastError = execResult.error;
+      console.error(`[Main] Code execution failed (attempt ${attemptCount}):`, lastError);
+
+      // If we haven't exhausted retries, prepare retry message
+      if (attemptCount < maxAttempts) {
+        console.log('[Main] Preparing auto-retry with error context...');
+        currentMessage = `${message}\n\n[IMPORTANT: Your previous code attempt failed with this error: "${lastError}". Please fix the issue and try again. Make sure to use valid Build123d API calls.]`;
+        // Clear click info for retry (already used)
+        clickInfo = null;
+      }
     }
+
+    // All attempts failed
+    console.error('[Main] All attempts failed, returning error');
+    return {
+      success: false,
+      error: `Python execution failed after ${maxAttempts} attempts: ${lastError}`
+    };
   } catch (err) {
     console.error('[Main] send-chat-message error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
+// IPC handler for refreshing Claude context
+ipcMain.handle('refresh-context', async (event, { currentCode, cleanedHistory }) => {
+  try {
+    console.log('[Main] Received refresh-context request');
+    console.log('[Main] Current code length:', currentCode?.length || 0);
+    console.log('[Main] Cleaned history entries:', cleanedHistory?.length || 0);
+
+    await claudeManager.refreshContext(currentCode, cleanedHistory);
+
+    return { success: true };
+  } catch (err) {
+    console.error('[Main] refresh-context error:', err);
     return {
       success: false,
       error: err.message
@@ -376,6 +430,97 @@ ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, c
   }
 });
 
+// IPC handler for loading project
+ipcMain.handle('load-project', async () => {
+  try {
+    console.log('[Main] Received load-project request');
+
+    // Show open dialog
+    const result = await dialog.showOpenDialog({
+      title: 'Open Project',
+      filters: [
+        { name: 'ClaudeCAD Project', extensions: ['cc'] },
+        { name: 'ClaudeCAD Prompt', extensions: ['md'] }
+      ],
+      properties: ['openFile']
+    });
+
+    if (result.canceled) {
+      console.log('[Main] Open dialog canceled');
+      return {
+        success: false,
+        canceled: true
+      };
+    }
+
+    const filePath = result.filePaths[0];
+    console.log('[Main] User selected file:', filePath);
+
+    // Read file
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+
+    // Check if it's a .md file (prompt file)
+    if (filePath.endsWith('.md')) {
+      // Check for "claudecad prompt:" header (case insensitive)
+      const firstLine = fileContent.split('\n')[0].toLowerCase().trim();
+      if (!firstLine.includes('claudecad prompt')) {
+        return {
+          success: false,
+          error: 'Markdown file must start with "claudecad prompt:" on the first line'
+        };
+      }
+
+      // Extract the prompt (everything after the first line)
+      const promptContent = fileContent.split('\n').slice(1).join('\n').trim();
+
+      return {
+        success: true,
+        isPrompt: true,
+        promptContent: promptContent,
+        filePath: filePath
+      };
+    }
+
+    // Parse JSON for .cc files
+    let projectData;
+    try {
+      projectData = JSON.parse(fileContent);
+    } catch (parseError) {
+      console.error('[Main] Failed to parse project file:', parseError);
+      return {
+        success: false,
+        error: 'Invalid project file: not valid JSON'
+      };
+    }
+
+    // Validate structure
+    if (!projectData.version || !projectData.code === undefined) {
+      return {
+        success: false,
+        error: 'Invalid project file: missing required fields'
+      };
+    }
+
+    console.log('[Main] Project loaded successfully');
+    console.log('[Main] Project name:', projectData.name);
+    console.log('[Main] Code length:', projectData.code?.length || 0);
+    console.log('[Main] Chat history length:', projectData.chat?.length || 0);
+
+    return {
+      success: true,
+      isPrompt: false,
+      filePath: filePath,
+      projectData: projectData
+    };
+  } catch (err) {
+    console.error('[Main] load-project error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
 app.whenReady().then(async () => {
   // Initialize Python manager
   try {
@@ -387,6 +532,160 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+
+  // Create application menu with proper keyboard shortcuts
+  const isMac = process.platform === 'darwin';
+  const menuTemplate = [
+    // App menu (macOS only)
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    }] : []),
+    // File menu
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New',
+          accelerator: 'CmdOrCtrl+Shift+K',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-new');
+            }
+          }
+        },
+        {
+          label: 'Open...',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-open');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-save');
+            }
+          }
+        },
+        {
+          label: 'Save As...',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-save-as');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Export STL...',
+          accelerator: 'CmdOrCtrl+E',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-export-stl');
+            }
+          }
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' }
+      ]
+    },
+    // Edit menu
+    {
+      label: 'Edit',
+      submenu: [
+        {
+          label: 'Undo',
+          accelerator: 'CmdOrCtrl+Z',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-undo');
+            }
+          }
+        },
+        {
+          label: 'Redo',
+          accelerator: 'CmdOrCtrl+Shift+Z',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-redo');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Clear Project',
+          accelerator: 'CmdOrCtrl+Shift+K',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-new');
+            }
+          }
+        },
+        {
+          label: 'Refresh Context',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-refresh-context');
+            }
+          }
+        },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    // View menu
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    // Window menu
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac ? [
+          { type: 'separator' },
+          { role: 'front' }
+        ] : [
+          { role: 'close' }
+        ])
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(menu);
 });
 
 app.on('before-quit', (event) => {
@@ -401,7 +700,8 @@ app.on('window-all-closed', () => {
   // Shutdown Python manager
   pythonManager.shutdown();
 
-  if (process.platform !== 'darwin') app.quit();
+  // Always quit when window is closed (even on macOS for this app)
+  app.quit();
 });
 
 app.on('activate', () => {

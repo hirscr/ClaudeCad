@@ -10,13 +10,32 @@
     <div id="header">
       <div class="header-left">
         <span class="app-title">ClaudeCAD</span>
+        <span class="toolbar-separator"></span>
+        <button id="open-button" class="header-button" title="Open Project (Cmd+O)">
+          <span class="button-icon">📂</span>
+        </button>
+        <button id="save-button" class="header-button" title="Save Project (Cmd+S)">
+          <span class="button-icon">💾</span>
+        </button>
+        <span class="toolbar-separator"></span>
+        <button id="undo-button" class="header-button" title="Undo (Cmd+Z)">
+          <span class="button-icon">↩</span>
+        </button>
+        <button id="redo-button" class="header-button" title="Redo (Cmd+Shift+Z)">
+          <span class="button-icon">↪</span>
+        </button>
       </div>
       <div class="header-right">
-        <button id="measure-button" class="header-button" title="Measure distance (M)">
-          <span class="measure-icon">📏</span>
-          <span class="measure-label">Measure</span>
-        </button>
         <span id="measure-distance"></span>
+        <button id="measure-button" class="header-button" title="Measure Distance (M)">
+          <span class="button-icon">📏</span>
+        </button>
+        <button id="refresh-context-button" class="header-button" title="Refresh Claude Context">
+          <span class="button-icon">🔄</span>
+        </button>
+        <button id="export-stl-button" class="header-button" title="Export STL (Cmd+E)">
+          <span class="button-icon">📦</span>
+        </button>
         <select id="view-dropdown">
           <option value="isometric">Isometric</option>
           <option value="front">Front</option>
