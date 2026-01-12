@@ -41,6 +41,20 @@ Features deferred from demo scope. Implement after core demo is working and Anth
 - Remember panel sizes (chat height)
 - Restore on next launch
 
+### Configurable Retry System
+- `maxRetries` setting (default 3)
+- Error categorization with per-type retry counts:
+  - Syntax/import errors (e.g., "name 'x' not defined") → more retries
+  - Geometry failures → fewer retries
+  - Timeouts → no retry
+- Settings UI to expose retry configuration
+
+### Configurable Timeout
+- Claude CLI timeout setting (default 30s)
+- Python execution timeout setting (default 10s)
+- Settings UI to expose
+- Consider: longer timeouts for complex models, shorter for simple edits
+
 ### Additional Export Formats
 - STEP (CAD interchange)
 - 3MF (modern 3D print format)

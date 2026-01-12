@@ -145,3 +145,98 @@
     - Claude sometimes uses undefined functions (e.g., `shell()` without proper syntax)
     - Error: "name 'shell' is not defined"
     - Claude's Build123d knowledge is imperfect
+
+## Phase 5: Persistence & Claude Code Integration
+
+### Arch/Artur Workflow
+
+27. **Arch Doesn't Code**
+    - Arch designs features and approves plans
+    - Artur implements code
+    - Arch violated this rule and made unauthorized edits - caused confusion
+    - Fix: Arch creates prompts, reviews plans, says APPROVE/REJECT - never touches code
+
+### Claude Code CLI Context
+
+28. **Claude Code CLI Maintains Its Own Context**
+    - The subprocess keeps full conversation history internally
+    - Our `history` array in renderer.js is separate from what Claude Code sends to Anthropic
+    - We don't directly control Claude Code's context - it manages its own
+    - Fix: Only way to truly reset is to restart the subprocess
+
+29. **App Restart Clears Polluted Context**
+    - Long conversations with errors degrade Claude's performance
+    - Claude starts hallucinating, generating syntax errors, timing out
+    - Restarting the app kills Claude Code subprocess, giving fresh context
+    - This is why "save, quit, reload" fixed issues that retrying couldn't
+
+30. **Context Injection on Project Load**
+    - When loading a project, chat history may conflict with actual model state
+    - Example: Chat says "I deleted the model" but model code was restored from file
+    - Fix: Prepend message after load: "[Note: Project was just loaded. Current code is ground truth - ignore conflicting chat history.]"
+
+31. **Claude Hallucinating Changes**
+    - Claude can claim to modify code but return identical code
+    - Comments say "changed X from 15.5 to 18.5" but value is still 15.5
+    - User sees no visual change, thinks rendering is broken
+    - Fix: Ask Claude to state exact before/after values; consider code diff detection
+
+32. **Error Messages Pollute Context**
+    - Failed attempts and error messages in history confuse Claude
+    - Each retry adds more noise, making subsequent attempts worse
+    - Fix: "Refresh Context" feature - /clear + clean continuation prompt (exclude errors)
+
+33. **Refresh Context Pattern**
+    - Send `/clear` to Claude Code CLI to reset
+    - Re-inject: current code + cleaned history (successful exchanges only) + "Await next command"
+    - User controls when to reset, not auto-compaction
+    - Warn at 70-80% context usage so user can proactively refresh
+
+34. **/context Command Is Free**
+    - Local CLI command, doesn't make API call
+    - Can poll periodically to show context usage meter
+    - Use to warn user before auto-compaction kicks in
+
+### Electron/macOS
+
+35. **macOS Needs Explicit app.quit()**
+    - Default Electron behavior: macOS apps stay running when windows close
+    - For ClaudeCAD, closing window should quit app
+    - Fix: In `window-all-closed`, always call `app.quit()` (not just on non-macOS)
+
+36. **Electron Menu Intercepts Keyboard Shortcuts**
+    - Cmd+S, Cmd+Z, Cmd+O, Cmd+X intercepted by Electron's default Edit/File menus
+    - Renderer's keydown handler never receives these events
+    - Fix: Create custom Electron Menu with proper accelerators that send IPC to renderer
+
+37. **Cmd+X Conflict**
+    - Cmd+X is standard "Cut" - Electron menu intercepts it
+    - Using for "Clear Project" conflicts with text editing
+    - Fix: Use Cmd+Shift+K for Clear (or just menu item, no shortcut)
+
+### Save/Load
+
+38. **Save As Needed for New Models**
+    - User loads project A, asks Claude to "make something completely different"
+    - Model replaced, but `currentFilePath` still points to A
+    - Cmd+S silently overwrites A with new content
+    - Fix: Claude returns `new_model: true` flag; when set, clear `currentFilePath` so Save prompts for new filename
+
+39. **Undo Requires Correct previousCode**
+    - If Claude returns same code repeatedly (hallucinating changes), `previousCode` equals `currentCode`
+    - Undo appears to do nothing because there's no actual difference
+    - Not a bug in Undo - bug is Claude not making real changes
+
+### UI/UX
+
+40. **Toolbar Buttons Should Be Icon-Only**
+    - Text labels take space and clutter toolbar
+    - Fix: Remove text, use icons only, show label + shortcut in tooltip on hover
+
+41. **Status Messages Need Distinct Colors**
+    - "Project saved" was green - same as success messages
+    - Fix: Use yellow (#dcdcaa) for save confirmation to draw user attention
+
+42. **Measurement Display Position**
+    - Measurement text should appear near Measure button, not floating
+    - Yellow color (#dcdcaa) for visibility

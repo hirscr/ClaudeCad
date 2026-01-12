@@ -958,7 +958,7 @@ async function refreshContext() {
     if (result.success) {
       console.log('[Renderer] Context refreshed successfully');
       statusText.textContent = 'Context refreshed';
-      statusText.style.color = '#dcdcaa'; // Yellow for visibility
+      statusText.style.color = '#ffffff'; // White
     } else {
       console.error('[Renderer] Context refresh failed:', result.error);
       statusText.textContent = `Refresh failed: ${result.error}`;

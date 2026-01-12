@@ -1,0 +1,32 @@
+[
+  {
+    "id": "p5-01",
+    "title": "Save Project (.cc file)",
+    "complete": true,
+    "prompt": "# TASK 1: Save Project (.cc file)\n\n## CONTEXT\nPhase 5: Persistence. Users need to save their work to disk.\n\n## PROJECT FILE FORMAT (.cc)\nJSON structure from spec:\n```json\n{\n  \"version\": \"1.0\",\n  \"name\": \"my-bracket\",\n  \"created\": \"2026-01-10T...\",\n  \"modified\": \"2026-01-10T...\",\n  \"code\": \"from build123d import *\\n...\",\n  \"chat\": [\n    {\"role\": \"user\", \"content\": \"...\", \"timestamp\": \"...\"},\n    {\"role\": \"assistant\", \"content\": \"...\", \"timestamp\": \"...\"}\n  ]\n}\n```\n\n## REQUIREMENTS\n1. Add Cmd+S keyboard shortcut to trigger save\n2. Show native save dialog (Electron dialog.showSaveDialog)\n3. Default filename from project name or 'untitled'\n4. File extension: .cc\n5. Save current Build123d code + chat history\n6. Track current file path after save (for subsequent Cmd+S)\n7. Track saved state (to detect unsaved changes later)\n\n## NOTES\n- Main process handles file dialogs via IPC\n- Renderer sends { code, chatHistory } to main\n- Main constructs full JSON and writes file\n- After first save, subsequent Cmd+S saves to same file (no dialog)\n\n## EXPECTED RESULT\n1. npm start\n2. Create a model via chat\n3. Press Cmd+S\n4. Save dialog appears with .cc filter\n5. Save file, open in text editor, see valid JSON\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-02",
+    "title": "Load Project (.cc file)",
+    "complete": true,
+    "prompt": "# TASK 2: Load Project (.cc file)\n\n## CONTEXT\nUsers need to open previously saved projects.\n\n## REQUIREMENTS\n1. Add Cmd+O keyboard shortcut to trigger open\n2. Show native open dialog (Electron dialog.showOpenDialog)\n3. Filter for .cc files only\n4. Parse JSON and validate structure\n5. Restore code and rebuild model via Python\n6. Restore chat history in UI\n7. Update current file path (for save)\n8. Handle invalid/corrupt files gracefully\n\n## NOTES\n- Main process reads file, parses JSON\n- Send code to Python subprocess for rebuild\n- Send chat history to renderer for display\n- Clear existing state before loading\n\n## EXPECTED RESULT\n1. npm start\n2. Press Cmd+O\n3. Select a .cc file\n4. Model rebuilds and appears in viewport\n5. Chat history shows in panel\n6. Subsequent Cmd+S saves to same file\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-03",
+    "title": "Single-Level Undo",
+    "complete": true,
+    "prompt": "# TASK 3: Single-Level Undo\n\n## CONTEXT\nUsers need to undo the last change.\n\n## SPEC REFERENCE\n```javascript\nlet previousCode = null;\n\nfunction saveUndo() {\n  previousCode = currentCode;\n}\n\nfunction undo() {\n  if (previousCode) {\n    currentCode = previousCode;\n    previousCode = null;\n    rebuildModel();\n  }\n}\n```\n\n## REQUIREMENTS\n1. Before each Claude response applies, save current code as previousCode\n2. Add Cmd+Z keyboard shortcut for undo\n3. Undo restores previousCode and rebuilds model\n4. Only one level - after undo, previousCode is null\n5. No redo (user can re-ask Claude)\n6. Undo should work even if last operation failed\n7. Add undo message to chat: \"Undid last change\"\n\n## NOTES\n- Store in renderer state (or main process if needed)\n- Disable undo when previousCode is null\n- Consider adding visual indicator (undo button disabled state)\n\n## EXPECTED RESULT\n1. Create a box\n2. Add a hole\n3. Press Cmd+Z\n4. Box returns (hole gone)\n5. Press Cmd+Z again -> nothing happens (only one level)\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-04",
+    "title": "Export STL",
+    "complete": true,
+    "prompt": "# TASK 4: Export STL\n\n## CONTEXT\nUsers need to export models for 3D printing.\n\n## REQUIREMENTS\n1. Add Export STL menu option or keyboard shortcut (Cmd+E)\n2. Show native save dialog with .stl filter\n3. Call Python subprocess to export STL\n4. Use binary STL format (smaller, standard)\n5. Handle export errors gracefully\n6. Show success/failure in status bar\n\n## NOTES\n- Python already has export capability via cad_engine.py\n- May need new IPC channel: 'export-stl'\n- Export current model code, write STL to user-chosen path\n- Build123d: export_stl(part.part, \"output.stl\")\n\n## EXPECTED RESULT\n1. Create a model\n2. Press Cmd+E (or menu)\n3. Save dialog appears with .stl filter\n4. Choose location, save\n5. STL file opens in slicer software correctly\n\nProvide a plan before implementing code."
+  },
+  {
+    "id": "p5-05",
+    "title": "Unsaved Changes Warning",
+    "complete": true,
+    "prompt": "# TASK 5: Unsaved Changes Warning\n\n## CONTEXT\nPrevent users from accidentally losing work.\n\n## REQUIREMENTS\n1. Track 'dirty' state - true when code changes after last save\n2. On window close (or Cmd+Q), check if dirty\n3. If dirty, show confirmation dialog:\n   - \"You have unsaved changes. Save before closing?\"\n   - [Save] [Don't Save] [Cancel]\n4. Save -> trigger save flow, then close\n5. Don't Save -> close without saving\n6. Cancel -> abort close, stay in app\n7. Also trigger on New Project / Load Project\n\n## NOTES\n- Use Electron's 'close' event on BrowserWindow\n- event.preventDefault() to block close, then show dialog\n- Track dirty state: set true on model change, false on save\n- Optional: show indicator in title bar (* for unsaved)\n\n## EXPECTED RESULT\n1. Create a model (don't save)\n2. Try to close window\n3. Warning dialog appears\n4. Click Cancel -> window stays open\n5. Save and close -> saves then closes\n6. After saving, close without warning\n\nProvide a plan before implementing code."
+  }
+]
