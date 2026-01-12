@@ -74,7 +74,7 @@
   {
     "id": "p6-13",
     "title": "Axes Toggle",
-    "complete": false,
+    "complete": true,
     "prompt": "# TASK 13: Axes Toggle\n\n## CONTEXT\nUsers should be able to show/hide the XYZ axes and labels.\n\n## REQUIREMENTS\n1. Add Axes toggle button to toolbar (icon: XYZ arrows)\n2. Default: axes visible\n3. Click toggles visibility of:\n   - axesHelper (the RGB lines)\n   - labelX, labelY, labelZ (the letter sprites)\n4. Button shows active state when axes visible\n5. Optional: keyboard shortcut (A key)\n\n## IMPLEMENTATION\n```javascript\nlet axesVisible = true;\n\nfunction toggleAxes() {\n  axesVisible = !axesVisible;\n  axesHelper.visible = axesVisible;\n  labelX.visible = axesVisible;\n  labelY.visible = axesVisible;\n  labelZ.visible = axesVisible;\n  document.getElementById('axes-button').classList.toggle('active', axesVisible);\n}\n```\n\n## FILES TO MODIFY\n- src/renderer/index.html (add button)\n- src/renderer/renderer.js (toggle logic)\n- src/renderer/styles.css (button styling if needed)\n\n## EXPECTED RESULT\n1. npm start\n2. Axes and labels visible by default\n3. Click Axes button -> axes and labels disappear\n4. Click again -> they reappear\n\nProvide a plan before implementing code."
   },
   {

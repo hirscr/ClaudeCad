@@ -151,6 +151,9 @@ let measureVisuals = {
 // Axes visibility state
 let axesVisible = true;
 
+// Render mode state
+let renderMode = 'solid'; // 'solid' | 'wireframe' | 'xray'
+
 // Pulse animation state (for red pulsing during Claude processing)
 let pulseAnimationId = null;
 let originalColors = new Map(); // Map<material, {color: Color, emissive: Color}>
@@ -226,6 +229,19 @@ document.getElementById('refresh-context-button').addEventListener('click', () =
 
 document.getElementById('export-stl-button').addEventListener('click', () => {
   exportSTL();
+});
+
+// Handle render mode buttons
+document.getElementById('solid-button').addEventListener('click', () => {
+  setRenderMode('solid');
+});
+
+document.getElementById('wireframe-button').addEventListener('click', () => {
+  setRenderMode('wireframe');
+});
+
+document.getElementById('xray-button').addEventListener('click', () => {
+  setRenderMode('xray');
 });
 
 // Handle viewport resize using ResizeObserver
@@ -568,6 +584,9 @@ function loadMesh(path) {
 
       // Apply feature color overrides if any
       applyFeatureColors();
+
+      // Apply current render mode
+      applyRenderMode(loadedMesh);
 
       // Only fit camera on first load, preserve user's camera position afterward
       if (isFirstLoad) {
@@ -933,6 +952,64 @@ function toggleAxes() {
 
 // Expose for debugging
 window.toggleAxes = toggleAxes;
+
+// ============================================================
+// RENDER MODE FUNCTIONALITY
+// ============================================================
+
+/**
+ * Set the render mode for the current mesh
+ * @param {string} mode - 'solid' | 'wireframe' | 'xray'
+ */
+function setRenderMode(mode) {
+  renderMode = mode;
+
+  // Update button states
+  document.getElementById('solid-button').classList.toggle('active', mode === 'solid');
+  document.getElementById('wireframe-button').classList.toggle('active', mode === 'wireframe');
+  document.getElementById('xray-button').classList.toggle('active', mode === 'xray');
+
+  // Apply to current mesh if loaded
+  if (currentMesh) {
+    applyRenderMode(currentMesh);
+  }
+
+  console.log(`[RenderMode] Mode set to: ${mode}`);
+}
+
+/**
+ * Apply current render mode to a mesh
+ * @param {THREE.Object3D} mesh - The mesh to apply the render mode to
+ */
+function applyRenderMode(mesh) {
+  mesh.traverse((child) => {
+    if (child.isMesh) {
+      switch (renderMode) {
+        case 'solid':
+          child.material.wireframe = false;
+          child.material.transparent = false;
+          child.material.opacity = 1;
+          child.visible = true;
+          break;
+        case 'wireframe':
+          child.material.wireframe = true;
+          child.material.transparent = false;
+          child.material.opacity = 1;
+          child.visible = true;
+          break;
+        case 'xray':
+          child.material.wireframe = false;
+          child.material.transparent = true;
+          child.material.opacity = 0.3;
+          child.visible = true;
+          break;
+      }
+    }
+  });
+}
+
+// Expose for debugging
+window.setRenderMode = setRenderMode;
 
 // ============================================================
 // MEASURE TOOL

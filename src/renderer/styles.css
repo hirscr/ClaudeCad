@@ -456,3 +456,49 @@ canvas {
   transform: scale(1.05);
 }
 
+/* Render Mode Button Group */
+.render-mode-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid #3c3c3c;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #252526;
+}
+
+.render-mode-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #252526;
+  color: #ffffff;
+  border: none;
+  border-right: 1px solid #3c3c3c;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s ease, color 0.15s ease;
+  min-width: 32px;
+  height: 24px;
+}
+
+.render-mode-button:last-child {
+  border-right: none;
+}
+
+.render-mode-button:hover {
+  background: #2a2d2e;
+}
+
+.render-mode-button.active {
+  background: rgba(74, 158, 255, 0.2);
+  color: #4a9eff;
+}
+
+.render-mode-button .button-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
