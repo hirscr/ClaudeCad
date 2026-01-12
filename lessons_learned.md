@@ -48,3 +48,48 @@
 9. **Artur Runs npm start Without Being Asked**
    - Even with instructions not to, Artur may verify by running app
    - Fix: Explicit "Do NOT run npm start" in artur.md
+
+## Phase 3: Claude Integration
+
+### Claude CLI Subprocess
+
+10. **Shell Escaping Corrupts Prompts**
+    - Using `shell: true` with spawn causes backticks in prompt to be interpreted as command substitution
+    - Prompts contain markdown code blocks with ` ``` ` which break shell parsing
+    - Fix: Use stdin to pass prompt instead of command-line argument, remove `shell: true`
+
+11. **Global Key Listeners Fire During Text Input**
+    - T key (test pipeline) and L key (spinner) fire even when typing in chat input
+    - Fix: Check `e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'` and return early
+
+### System Prompt Engineering
+
+12. **OUTPUT_PATH Not Defined**
+    - System prompt told Claude to use `OUTPUT_PATH` placeholder for export
+    - cad_engine.py didn't inject this variable
+    - Fix: Tell Claude NOT to include export lines - cad_engine handles it automatically
+
+13. **'part' Variable Required**
+    - cad_engine.py expects code to have variable named exactly `part`
+    - Fix: System prompt must specify `with BuildPart() as part:` pattern
+
+14. **Don't Over-Specify the API**
+    - Listing only Box, Cylinder, Sphere limited what Claude could create
+    - Claude already knows Build123d from training
+    - Fix: Give minimal constraints (use `part`, no export) and let Claude use its full knowledge
+
+### Build123d Limitations
+
+15. **Export Wrong Object**
+    - cad_engine.py was exporting `part` (BuildPart context manager) not `part.part` (geometry)
+    - Error: `'BuildPart' has no attribute 'wrapped'`
+    - Fix: Change `export_mesh(part)` to `export_mesh(part.part)`
+
+16. **No Non-Uniform Scaling**
+    - Build123d's `scale()` only accepts single float for uniform scaling
+    - Cannot create ellipsoids via scaled spheres
+    - Fix: Add to system prompt as limitation, suggest simpler alternatives
+
+17. **Mesh Z-Inversion**
+    - Initial rotation -90° on X was wrong direction
+    - Fix: Change to +90° (positive `Math.PI / 2`)

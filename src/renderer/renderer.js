@@ -94,6 +94,10 @@ let currentMesh = null;
 // Track current Build123d code (for iterative editing)
 let currentCode = '';
 
+// Raycaster for click detection
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
@@ -794,6 +798,56 @@ window.sendChatMessage = sendChatMessage;
 Object.defineProperty(window, 'currentCode', {
   get: () => currentCode,
   set: (value) => { currentCode = value; }
+});
+
+// ============================================================
+// RAYCASTER CLICK DETECTION
+// ============================================================
+
+/**
+ * Handle mouse click on viewport to detect mesh intersections
+ */
+renderer.domElement.addEventListener('click', (event) => {
+  // Only process if we have a mesh loaded
+  if (!currentMesh) {
+    return;
+  }
+
+  // Get canvas bounding rectangle
+  const canvas = renderer.domElement;
+  const rect = canvas.getBoundingClientRect();
+
+  // Calculate normalized device coordinates (-1 to +1)
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  // Cast ray from camera through mouse position
+  raycaster.setFromCamera(mouse, camera);
+
+  // Check for intersections with all objects in the scene
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  // Filter to only include intersections with the current mesh
+  // (Exclude grid, axes, labels, test cube, lights)
+  const meshIntersects = intersects.filter(intersect => {
+    // Walk up the parent chain to see if this object belongs to currentMesh
+    let obj = intersect.object;
+    while (obj) {
+      if (obj === currentMesh) {
+        return true;
+      }
+      obj = obj.parent;
+    }
+    return false;
+  });
+
+  // Log intersection point if found
+  if (meshIntersects.length > 0) {
+    const firstHit = meshIntersects[0];
+    const point = firstHit.point;
+
+    console.log(`[Raycaster] Hit at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`);
+  }
 });
 
 // ============================================================
