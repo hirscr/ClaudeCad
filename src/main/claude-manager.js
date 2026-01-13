@@ -138,22 +138,14 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
   prompt += '- RGB colors: Color(r, g, b) with values 0-1\n\n';
 
   prompt += '## Coordinate System\n\n';
-  prompt += 'Z = up, Y = forward (toward viewer), X = right\n\n';
+  prompt += 'Directions: +Z=up, -Z=down, +Y=forward, -Y=backward, +X=right, -X=left\n\n';
 
-  prompt += '## Orienting Cones and Cylinders\n\n';
-  prompt += 'Cones/cylinders point forward (+Y) by default. For other directions use plane=:\n\n';
-  prompt += '| Direction     | Plane                              |\n';
-  prompt += '|---------------|------------------------------------|\n';
-  prompt += '| Forward (+Y)  | (default - no plane needed)        |\n';
-  prompt += '| Up (+Z)       | plane=Plane.XZ                     |\n';
-  prompt += '| Down (-Z)     | plane=Plane.XZ.rotated((180,0,0))  |\n';
-  prompt += '| Right (+X)    | plane=Plane.YZ                     |\n';
-  prompt += '| Left (-X)     | plane=Plane.YZ.rotated((0,180,0))  |\n';
-  prompt += '| Backward (-Y) | plane=Plane.XY.rotated((180,0,0))  |\n\n';
-  prompt += 'IMPORTANT:\n';
-  prompt += '- plane= is ONLY for orientation (which direction shape points)\n';
-  prompt += '- Pos() * is for position (where shape is located)\n';
-  prompt += '- DO NOT use Rot() for cone/cylinder orientation\n\n';
+  prompt += '## Shape Orientation\n\n';
+  prompt += 'Shapes orient naturally based on description:\n';
+  prompt += '- "pointing up" = along +Z axis\n';
+  prompt += '- "pointing forward" = along +Y axis\n';
+  prompt += '- "pointing right" = along +X axis\n';
+  prompt += '- Cylinders/cones default to +Z (upright)\n\n';
 
   // Limitations
   prompt += '# Limitations\n\n';

@@ -32,6 +32,81 @@ def read_stdin():
     return ''.join(lines)
 
 
+def color_to_hex(color):
+    """Convert Build123d Color object to hex string."""
+    if color is None:
+        return None
+    try:
+        # Color.wrapped is the OCP color with Red(), Green(), Blue() methods (0-1 range)
+        r = int(color.wrapped.Red() * 255)
+        g = int(color.wrapped.Green() * 255)
+        b = int(color.wrapped.Blue() * 255)
+        return '#{:02x}{:02x}{:02x}'.format(r, g, b)
+    except Exception:
+        return None
+
+
+def extract_shape_info(part):
+    """
+    Extract individual solids from a part with their colors.
+    Uses TopExp_Explorer to iterate through all SOLID shapes.
+
+    Args:
+        part: The Build123d part object (geometry)
+
+    Returns:
+        List of dicts: [{solid: Solid, color: "#hex" or None, label: "shape_N"}, ...]
+    """
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    from build123d import Solid
+
+    shapes = []
+
+    # Use TopExp_Explorer to iterate all solids in the geometry
+    explorer = TopExp_Explorer(part.wrapped, TopAbs_SOLID)
+    idx = 0
+
+    while explorer.More():
+        solid_wrapped = explorer.Current()
+        solid = Solid(solid_wrapped)
+
+        # Try to get color directly from the solid
+        hex_color = None
+        if hasattr(solid, 'color') and solid.color:
+            hex_color = color_to_hex(solid.color)
+
+        # Default to gray if no color
+        if hex_color is None:
+            hex_color = "#888888"
+
+        shapes.append({
+            'solid': solid,
+            'color': hex_color,
+            'label': f'shape_{idx}'
+        })
+
+        explorer.Next()
+        idx += 1
+
+    # If no solids found, treat the whole part as a single shape
+    if not shapes:
+        hex_color = None
+        if hasattr(part, 'color') and part.color:
+            hex_color = color_to_hex(part.color)
+        if hex_color is None:
+            hex_color = "#888888"
+
+        shapes.append({
+            'solid': part,
+            'color': hex_color,
+            'label': 'shape_0'
+        })
+
+    print(f"[DEBUG extract_shape_info] Found {len(shapes)} shapes", file=sys.stderr)
+    return shapes
+
+
 def execute_build123d(code):
     """
     Execute Build123d code in an isolated namespace.
@@ -196,27 +271,43 @@ def extract_colors(code):
     return indexed_colors
 
 
-def export_mesh(part):
+def export_meshes(shapes_info):
     """
-    Export Build123d part to mesh format (glTF preferred, STL fallback).
-    Returns the file path of the exported mesh.
-    """
-    # Create temporary file
-    temp_dir = tempfile.gettempdir()
+    Export each shape to its own glTF file.
 
-    # Try glTF export first (better for Three.js)
-    try:
-        gltf_path = os.path.join(temp_dir, f"claudecad_{os.getpid()}.glb")
-        export_gltf(part, gltf_path)
-        return gltf_path
-    except Exception as gltf_error:
-        # Fall back to STL
+    Args:
+        shapes_info: List from extract_shape_info [{solid, color, label}, ...]
+
+    Returns:
+        List of dicts: [{mesh_path: str, color: str, label: str}, ...]
+    """
+    temp_dir = tempfile.gettempdir()
+    results = []
+
+    for i, shape_info in enumerate(shapes_info):
+        solid = shape_info['solid']
+        gltf_path = os.path.join(temp_dir, f"claudecad_{os.getpid()}_{i}.glb")
+
         try:
-            stl_path = os.path.join(temp_dir, f"claudecad_{os.getpid()}.stl")
-            export_stl(part, stl_path)
-            return stl_path
-        except Exception as stl_error:
-            raise Exception(f"glTF export failed: {gltf_error}. STL export also failed: {stl_error}")
+            from build123d import Location
+            # Save original location
+            original_location = solid.location
+            # Apply +90° X via location transform (composes with export_gltf's -90°)
+            solid.location *= Location((0, 0, 0), (1, 0, 0), 90)
+            export_gltf(solid, gltf_path)
+            # Restore original location to avoid side effects
+            solid.location = original_location
+            results.append({
+                'mesh_path': gltf_path,
+                'color': shape_info['color'],
+                'label': shape_info['label']
+            })
+            print(f"[DEBUG export_meshes] Exported shape {i} ({shape_info['label']}) to {gltf_path}", file=sys.stderr)
+        except Exception as e:
+            print(f"[ERROR export_meshes] Failed to export shape {i}: {e}", file=sys.stderr)
+            # Continue with other shapes
+
+    return results
 
 
 def handle_export_stl(code, output_path):
@@ -273,30 +364,43 @@ def main():
         # Execute the code
         part, namespace = execute_build123d(code)
 
+        # Handle both BuildPart result (has .part) and direct shapes (Compound, Solid, etc.)
+        if hasattr(part, 'part'):
+            # BuildPart context manager result
+            geometry = part.part
+        else:
+            # Direct shape (Compound, Solid, etc.)
+            geometry = part
+
         # Check if geometry is empty (e.g., user said "delete everything")
-        if part.part is None:
+        if geometry is None:
             print(json.dumps({
                 "success": True,
                 "empty": True,
-                "mesh_path": None,
-                "colors": {}
+                "shapes": []
             }))
             return
 
-        # Export to mesh format (part.part is the actual geometry)
-        mesh_path = export_mesh(part.part)
+        # Extract shape information (iterates solids)
+        shapes_info = extract_shape_info(geometry)
 
-        # Extract color information from code
-        colors = extract_colors(code)
+        # Extract colors from code and apply to shapes by index
+        indexed_colors = extract_colors(code)
+        for idx, hex_color in indexed_colors.items():
+            if idx < len(shapes_info):
+                shapes_info[idx]['color'] = hex_color
+                print(f"[DEBUG main] Applied color {hex_color} to shape {idx}", file=sys.stderr)
 
-        # Calculate volume (Build123d provides this in cubic mm)
-        volume = part.part.volume
+        # Export each shape to its own glTF file
+        exported_shapes = export_meshes(shapes_info)
 
-        # Success response
+        # Calculate total volume (Build123d provides this in cubic mm)
+        volume = geometry.volume
+
+        # Success response with multi-shape format
         print(json.dumps({
             "success": True,
-            "mesh_path": mesh_path,
-            "colors": colors,
+            "shapes": exported_shapes,
             "volume": volume
         }))
 

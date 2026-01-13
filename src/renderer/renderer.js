@@ -672,8 +672,8 @@ function loadShapes(shapes, volume = 0) {
   // Create parent group for all shapes
   const shapeGroup = new THREE.Group();
   shapeGroup.name = 'shapeGroup';
-  // Rotate entire group from Z-up (Build123d) to Y-up (Three.js)
-  // shapeGroup.rotation.x = -Math.PI / 2;  // DISABLED - testing if export is already Y-up
+  // No rotation needed - coordinates are Z-up from export
+  // shapeGroup.rotation.x = Math.PI / 2;  // REMOVED
 
   // Track loading progress
   let loadedCount = 0;
