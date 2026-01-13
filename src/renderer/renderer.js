@@ -3480,6 +3480,80 @@ renderer.domElement.addEventListener('click', (event) => {
 });
 
 // ============================================================
+// VIEWPORT SCREENSHOT CAPTURE
+// ============================================================
+
+/**
+ * Capture the current viewport as a PNG buffer
+ * @returns {Promise<Uint8Array>} PNG image data
+ */
+async function captureViewport() {
+  // Store original clear color
+  const originalClearColor = renderer.getClearColor(new THREE.Color());
+  const originalClearAlpha = renderer.getClearAlpha();
+
+  // Set solid background for screenshot
+  renderer.setClearColor(0x1e1e1e, 1);  // Match app background
+
+  // Render
+  renderer.render(scene, camera);
+
+  // Capture
+  const canvas = renderer.domElement;
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      // Restore original clear color
+      renderer.setClearColor(originalClearColor, originalClearAlpha);
+
+      if (!blob) {
+        reject(new Error('Failed to capture viewport'));
+        return;
+      }
+
+      blob.arrayBuffer().then(buffer => {
+        resolve(new Uint8Array(buffer));
+      }).catch(reject);
+    }, 'image/png');
+  });
+}
+
+/**
+ * Capture viewport and save to temp directory
+ * @returns {Promise<{number, path, thumbnail}>} Image info
+ */
+async function saveViewportScreenshot() {
+  try {
+    const buffer = await captureViewport();
+
+    const result = await ipcRenderer.invoke('save-temp-image', {
+      buffer: Array.from(buffer),
+      type: 'viewport'
+    });
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    // Create thumbnail URL from the buffer
+    const blob = new Blob([buffer], { type: 'image/png' });
+    const thumbnail = URL.createObjectURL(blob);
+
+    return {
+      number: result.number,
+      path: result.path,
+      thumbnail
+    };
+  } catch (err) {
+    console.error('[Renderer] Viewport capture error:', err);
+    throw err;
+  }
+}
+
+// Expose for console testing
+window.saveViewportScreenshot = saveViewportScreenshot;
+
+// ============================================================
 // PASTE HANDLING FOR REFERENCE IMAGES
 // ============================================================
 
