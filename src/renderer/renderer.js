@@ -318,6 +318,21 @@ document.getElementById('spec-save-button').addEventListener('click', async () =
   }
 });
 
+// Spec editor input handler - update build button state
+document.getElementById('spec-editor').addEventListener('input', updateBuildButtonState);
+
+// Spec editor Tab key handler - insert spaces instead of moving focus
+document.getElementById('spec-editor').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const editor = e.target;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, start) + '  ' + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + 2;
+  }
+});
+
 // Handle viewport resize using ResizeObserver
 const resizeObserver = new ResizeObserver(() => {
   const width = viewportElement.clientWidth;
@@ -388,8 +403,15 @@ function setProcessing(phase) {
     // Done: Stop pulse, hide loading, reset status
     stopPulseAnimation(); // Stop pulse if active
     loadingOverlay.classList.add('hidden');
-    statusText.textContent = 'Ready';
-    statusText.style.color = '#888888';
+
+    // Set status based on design mode
+    if (designMode) {
+      statusText.textContent = 'Design Mode';
+      statusText.style.color = '#4ec9b0';
+    } else {
+      statusText.textContent = 'Ready';
+      statusText.style.color = '#888888';
+    }
 
     // Re-enable toolbar buttons
     setToolbarDisabled(false);
@@ -904,6 +926,29 @@ function clearViewport() {
  * Used for Cmd+X (Clear) command
  */
 async function clearProject() {
+  // If in design mode, ask about unsaved spec
+  if (designMode) {
+    const spec = document.getElementById('spec-editor').value.trim();
+    if (spec) {
+      const response = await ipcRenderer.invoke('show-message-box', {
+        type: 'question',
+        buttons: ['Clear Anyway', 'Cancel'],
+        defaultId: 1,
+        title: 'Unsaved Spec',
+        message: 'You have an unsaved spec. Clear anyway?'
+      });
+
+      if (response.response !== 0) {
+        console.log('[Renderer] Clear canceled - unsaved spec');
+        return;
+      }
+    }
+
+    // Clear spec editor and exit design mode
+    document.getElementById('spec-editor').value = '';
+    exitDesignMode();
+  }
+
   // Check for unsaved changes first
   const canProceed = await checkUnsavedChanges();
   if (!canProceed) {
@@ -1054,6 +1099,17 @@ function saveUndo() {
  * Undo last change (single-level)
  */
 async function undo() {
+  // Check if in design mode
+  if (designMode) {
+    statusText.textContent = 'Build first, then undo';
+    statusText.style.color = '#dcdcaa';
+    setTimeout(() => {
+      statusText.textContent = 'Design Mode';
+      statusText.style.color = '#4ec9b0';
+    }, 2000);
+    return;
+  }
+
   if (previousCode === null) {
     console.log('[Undo] No previous state to restore');
     statusText.textContent = 'Nothing to undo';
@@ -1109,6 +1165,17 @@ async function undo() {
  * Redo last undone change (single-level)
  */
 async function redo() {
+  // Check if in design mode
+  if (designMode) {
+    statusText.textContent = 'Build first, then redo';
+    statusText.style.color = '#dcdcaa';
+    setTimeout(() => {
+      statusText.textContent = 'Design Mode';
+      statusText.style.color = '#4ec9b0';
+    }, 2000);
+    return;
+  }
+
   if (undoneCode === null) {
     console.log('[Redo] No undone state to restore');
     statusText.textContent = 'Nothing to redo';
@@ -1291,6 +1358,9 @@ function toggleDesignMode() {
  * Enter design mode - show spec panel and update UI
  */
 function enterDesignMode() {
+  // Set design mode flag to true
+  designMode = true;
+
   // Show spec panel
   document.getElementById('spec-panel').style.display = 'flex';
   document.getElementById('spec-resize-handle').style.display = 'block';
@@ -1305,6 +1375,15 @@ function enterDesignMode() {
   // Dim viewport slightly
   document.getElementById('viewport').classList.add('design-mode-active');
 
+  // If spec is empty, show hint in chat
+  const spec = document.getElementById('spec-editor').value.trim();
+  if (!spec) {
+    addMessage('system', 'Design Mode active. Describe what you want to build, or Load an existing spec.');
+  }
+
+  // Update build button state
+  updateBuildButtonState();
+
   console.log('[DesignMode] Entered design mode');
 }
 
@@ -1312,6 +1391,9 @@ function enterDesignMode() {
  * Exit design mode - hide spec panel and restore UI
  */
 function exitDesignMode() {
+  // Set design mode flag to false
+  designMode = false;
+
   // Hide spec panel
   document.getElementById('spec-panel').style.display = 'none';
   document.getElementById('spec-resize-handle').style.display = 'none';
@@ -1327,6 +1409,14 @@ function exitDesignMode() {
   document.getElementById('viewport').classList.remove('design-mode-active');
 
   console.log('[DesignMode] Exited design mode');
+}
+
+/**
+ * Update build button state based on spec content
+ */
+function updateBuildButtonState() {
+  const spec = document.getElementById('spec-editor').value.trim();
+  document.getElementById('spec-build-button').disabled = !spec;
 }
 
 // Expose for debugging
@@ -1671,6 +1761,17 @@ window.checkUnsavedChanges = checkUnsavedChanges;
  * Save the current project to a .cc file
  */
 async function saveProject() {
+  // Warn if in design mode with unsaved spec
+  if (designMode) {
+    const spec = document.getElementById('spec-editor').value.trim();
+    if (spec) {
+      addMessage('system', 'Note: Spec is not included in project file. Use "Save" in spec panel to save spec separately.');
+    } else {
+      addMessage('system', 'Build your spec first to save a project.');
+      return;
+    }
+  }
+
   try {
     console.log('[Renderer] Saving project...');
 
@@ -2080,6 +2181,12 @@ document.addEventListener('keydown', (e) => {
 
   // Escape key: clear various states
   if (e.key === 'Escape') {
+    // Exit design mode if active
+    if (designMode) {
+      exitDesignMode();
+      return;
+    }
+
     // Deselect feature and hide color palette
     if (selectedFeature) {
       deselectFeature();
@@ -2184,6 +2291,12 @@ function updateSpecResizeHandleVisibility() {
 // Initial visibility check
 updateSpecResizeHandleVisibility();
 
+// Restore spec panel width from localStorage
+const savedWidth = localStorage.getItem('specPanelWidth');
+if (savedWidth) {
+  specPanel.style.width = savedWidth + 'px';
+}
+
 // Watch for style changes to spec panel
 const specPanelObserver = new MutationObserver(updateSpecResizeHandleVisibility);
 specPanelObserver.observe(specPanel, { attributes: true, attributeFilter: ['style'] });
@@ -2220,6 +2333,8 @@ document.addEventListener('mouseup', () => {
     isResizingSpec = false;
     // Re-enable text selection
     document.body.style.userSelect = '';
+    // Save spec panel width to localStorage
+    localStorage.setItem('specPanelWidth', specPanel.offsetWidth);
   }
 });
 
