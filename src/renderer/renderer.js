@@ -161,6 +161,9 @@ let axesVisible = true;
 // Render mode state
 let renderMode = 'solid'; // 'solid' | 'wireframe' | 'xray'
 
+// Design mode state
+let designMode = false;
+
 // Pulse animation state (for red pulsing during Claude processing)
 let pulseAnimationId = null;
 let originalColors = new Map(); // Map<material, {color: Color, emissive: Color}>
@@ -261,6 +264,10 @@ document.getElementById('wireframe-button').addEventListener('click', () => {
 
 document.getElementById('xray-button').addEventListener('click', () => {
   setRenderMode('xray');
+});
+
+document.getElementById('design-mode-button').addEventListener('click', () => {
+  toggleDesignMode();
 });
 
 // Handle viewport resize using ResizeObserver
@@ -1216,6 +1223,68 @@ function applyRenderMode(mesh) {
 window.setRenderMode = setRenderMode;
 
 // ============================================================
+// DESIGN MODE FUNCTIONALITY
+// ============================================================
+
+/**
+ * Toggle design mode on/off
+ */
+function toggleDesignMode() {
+  designMode = !designMode;
+
+  if (designMode) {
+    enterDesignMode();
+  } else {
+    exitDesignMode();
+  }
+}
+
+/**
+ * Enter design mode - show spec panel and update UI
+ */
+function enterDesignMode() {
+  // Show spec panel
+  document.getElementById('spec-panel').style.display = 'flex';
+  document.getElementById('spec-resize-handle').style.display = 'block';
+
+  // Update status bar
+  statusText.textContent = 'Design Mode';
+  statusText.style.color = '#4ec9b0'; // Success green/teal
+
+  // Update toggle button state
+  document.getElementById('design-mode-button').classList.add('active');
+
+  // Dim viewport slightly
+  document.getElementById('viewport').classList.add('design-mode-active');
+
+  console.log('[DesignMode] Entered design mode');
+}
+
+/**
+ * Exit design mode - hide spec panel and restore UI
+ */
+function exitDesignMode() {
+  // Hide spec panel
+  document.getElementById('spec-panel').style.display = 'none';
+  document.getElementById('spec-resize-handle').style.display = 'none';
+
+  // Update status bar
+  statusText.textContent = 'Ready';
+  statusText.style.color = '#888888';
+
+  // Update toggle button state
+  document.getElementById('design-mode-button').classList.remove('active');
+
+  // Remove viewport dim
+  document.getElementById('viewport').classList.remove('design-mode-active');
+
+  console.log('[DesignMode] Exited design mode');
+}
+
+// Expose for debugging
+window.toggleDesignMode = toggleDesignMode;
+
+// ============================================================
 // MEASURE TOOL
 // ============================================================
 
@@ -1451,6 +1520,10 @@ ipcRenderer.on('menu-redo', () => {
 
 ipcRenderer.on('menu-refresh-context', () => {
   refreshContext();
+});
+
+ipcRenderer.on('menu-toggle-design-mode', () => {
+  toggleDesignMode();
 });
 
 // ============================================================
@@ -1950,6 +2023,13 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Cmd+D / Ctrl+D: Toggle design mode
+  if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+    e.preventDefault(); // Prevent browser bookmark dialog
+    toggleDesignMode();
+    return;
+  }
+
   // Escape key: clear various states
   if (e.key === 'Escape') {
     // Deselect feature and hide color palette
@@ -2332,6 +2412,25 @@ async function sendChatMessage() {
   if (isProcessing) {
     console.log('[Chat] Already processing, ignoring');
     return;
+  }
+
+  // Check for /design command
+  if (message.startsWith('/design')) {
+    if (!designMode) {
+      enterDesignMode();
+    }
+    // Extract the design target (if provided)
+    const designTarget = message.replace('/design', '').trim();
+    if (designTarget) {
+      console.log('[DesignMode] Design target specified:', designTarget);
+      // Will be used in next task for Claude prompt
+    }
+  }
+
+  // Check for /build command
+  if (message === '/build') {
+    console.log('[DesignMode] Build command detected');
+    // Will trigger build in task 5
   }
 
   // Clear input immediately

@@ -718,6 +718,16 @@ app.whenReady().then(async () => {
     {
       label: 'View',
       submenu: [
+        {
+          label: 'Toggle Design Mode',
+          accelerator: 'CmdOrCtrl+D',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-toggle-design-mode');
+            }
+          }
+        },
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'forceReload' },
         { role: 'toggleDevTools' },

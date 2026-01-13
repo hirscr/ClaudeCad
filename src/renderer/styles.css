@@ -136,6 +136,26 @@ canvas {
   display: block;
 }
 
+/* Design Mode Viewport Effect */
+#viewport.design-mode-active {
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+#viewport.design-mode-active::after {
+  content: 'DESIGN MODE';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(78, 201, 176, 0.25);
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* Spec Panel */
 #spec-panel {
   display: none;
