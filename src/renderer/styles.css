@@ -766,3 +766,8 @@ canvas {
   line-height: 1;
 }
 
+/* Capture View Button */
+#capture-view-button:active {
+  background: #4a9eff;
+}
+

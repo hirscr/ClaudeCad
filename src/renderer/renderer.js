@@ -245,6 +245,37 @@ document.getElementById('measure-button').addEventListener('click', () => {
   toggleMeasureMode();
 });
 
+document.getElementById('capture-view-button').addEventListener('click', async () => {
+  try {
+    const captureBtn = document.getElementById('capture-view-button');
+    captureBtn.disabled = true;
+
+    // Save original content
+    const originalContent = captureBtn.innerHTML;
+    captureBtn.innerHTML = '<span class="button-icon">⏳</span>';
+
+    const imageInfo = await saveViewportScreenshot();
+
+    // Add to pending images (same as paste)
+    pendingImages.push(imageInfo);
+    updatePendingImagesUI();
+
+    // Brief feedback
+    captureBtn.innerHTML = '<span class="button-icon">✓</span>';
+    setTimeout(() => {
+      captureBtn.innerHTML = originalContent;
+      captureBtn.disabled = false;
+    }, 1000);
+
+    console.log(`[Renderer] Viewport captured as Image ${imageInfo.number}`);
+  } catch (err) {
+    console.error('[Renderer] Capture failed:', err);
+    const captureBtn = document.getElementById('capture-view-button');
+    captureBtn.innerHTML = '<span class="button-icon">📷</span>';
+    captureBtn.disabled = false;
+  }
+});
+
 document.getElementById('refresh-context-button').addEventListener('click', () => {
   refreshContext();
 });
@@ -365,7 +396,7 @@ const statusStats = document.getElementById('status-stats');
 // Toolbar buttons that should be disabled during processing
 const toolbarButtonIds = [
   'open-button', 'save-button', 'undo-button', 'redo-button', 'clear-button',
-  'axes-button', 'highlight-button', 'measure-button', 'refresh-context-button', 'export-stl-button',
+  'axes-button', 'highlight-button', 'measure-button', 'capture-view-button', 'refresh-context-button', 'export-stl-button',
   'fit-view-button', 'solid-button', 'wireframe-button', 'xray-button'
 ];
 
@@ -2276,6 +2307,11 @@ document.addEventListener('keydown', (e) => {
   // M key: toggle measure mode
   if (e.key === 'm' || e.key === 'M') {
     toggleMeasureMode();
+  }
+
+  // C key: capture viewport
+  if (e.key === 'c' || e.key === 'C') {
+    document.getElementById('capture-view-button').click();
   }
 });
 
