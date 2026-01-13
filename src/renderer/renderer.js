@@ -270,6 +270,54 @@ document.getElementById('design-mode-button').addEventListener('click', () => {
   toggleDesignMode();
 });
 
+// Spec Load button handler
+document.getElementById('spec-load-button').addEventListener('click', async () => {
+  try {
+    const result = await ipcRenderer.invoke('load-spec-file');
+
+    if (result.canceled) {
+      return;
+    }
+
+    if (result.success) {
+      document.getElementById('spec-editor').value = result.content;
+      addMessage('system', `Loaded spec: ${result.fileName}`);
+      isDirty = true;
+      updateWindowTitle();
+    } else {
+      addMessage('error', `Failed to load spec: ${result.error}`);
+    }
+  } catch (err) {
+    addMessage('error', `Load error: ${err.message}`);
+  }
+});
+
+// Spec Save button handler
+document.getElementById('spec-save-button').addEventListener('click', async () => {
+  const spec = document.getElementById('spec-editor').value.trim();
+
+  if (!spec) {
+    addMessage('error', 'No spec to save.');
+    return;
+  }
+
+  try {
+    const result = await ipcRenderer.invoke('save-spec-file', { content: spec });
+
+    if (result.canceled) {
+      return;
+    }
+
+    if (result.success) {
+      addMessage('system', `Spec saved: ${result.fileName}`);
+    } else {
+      addMessage('error', `Failed to save spec: ${result.error}`);
+    }
+  } catch (err) {
+    addMessage('error', `Save error: ${err.message}`);
+  }
+});
+
 // Handle viewport resize using ResizeObserver
 const resizeObserver = new ResizeObserver(() => {
   const width = viewportElement.clientWidth;

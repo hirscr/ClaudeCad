@@ -611,6 +611,80 @@ ipcMain.handle('load-project', async () => {
   }
 });
 
+// IPC handler for loading spec file
+ipcMain.handle('load-spec-file', async (event) => {
+  try {
+    const fs = require('fs').promises;
+    const path = require('path');
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Load Spec File',
+      defaultPath: path.join(__dirname, '../../models'),  // Start in models/ folder
+      filters: [
+        { name: 'Markdown', extensions: ['md'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+
+    if (result.canceled) {
+      return { canceled: true };
+    }
+
+    const filePath = result.filePaths[0];
+    const content = await fs.readFile(filePath, 'utf-8');
+    const fileName = path.basename(filePath);
+
+    return {
+      success: true,
+      content,
+      fileName,
+      filePath
+    };
+  } catch (err) {
+    console.error('[Main] Load spec error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
+// IPC handler for saving spec file
+ipcMain.handle('save-spec-file', async (event, { content }) => {
+  try {
+    const fs = require('fs').promises;
+    const path = require('path');
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Spec File',
+      defaultPath: path.join(__dirname, '../../models/my-design.md'),
+      filters: [
+        { name: 'Markdown', extensions: ['md'] }
+      ]
+    });
+
+    if (result.canceled) {
+      return { canceled: true };
+    }
+
+    await fs.writeFile(result.filePath, content, 'utf-8');
+    const fileName = path.basename(result.filePath);
+
+    return {
+      success: true,
+      fileName,
+      filePath: result.filePath
+    };
+  } catch (err) {
+    console.error('[Main] Save spec error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
 app.whenReady().then(async () => {
   // Initialize Python manager
   try {
