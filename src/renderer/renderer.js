@@ -1794,11 +1794,12 @@ async function saveProject() {
   try {
     console.log('[Renderer] Saving project...');
 
-    // Prepare chat history for saving (only role, content, timestamp)
+    // Prepare chat history for saving (role, content, timestamp, images)
     const chatHistoryForSave = messageHistory.map(msg => ({
       role: msg.role,
       content: msg.content,
-      timestamp: msg.timestamp.toISOString()
+      timestamp: msg.timestamp.toISOString(),
+      images: msg.images // Include image paths if present
     }));
 
     // Call IPC to save
@@ -1959,12 +1960,40 @@ async function loadProject() {
         messageHistory.push({
           role: msg.role,
           content: msg.content,
-          timestamp: new Date(msg.timestamp)
+          timestamp: new Date(msg.timestamp),
+          images: msg.images // Restore image paths
         });
 
         // Add to UI (simplified - just add the message element)
         const messageEl = document.createElement('div');
         messageEl.className = `chat-message ${msg.role}`;
+
+        // Add images if present (show placeholder since we don't have thumbnails)
+        if (msg.images && msg.images.length > 0) {
+          const imagesContainer = document.createElement('div');
+          imagesContainer.className = 'message-images';
+
+          for (const img of msg.images) {
+            const imgWrapper = document.createElement('div');
+            imgWrapper.className = 'message-image-item';
+            imgWrapper.style.background = '#2d2d30';
+            imgWrapper.style.display = 'flex';
+            imgWrapper.style.alignItems = 'center';
+            imgWrapper.style.justifyContent = 'center';
+            imgWrapper.style.fontSize = '10px';
+            imgWrapper.style.color = '#888888';
+            imgWrapper.textContent = '🖼️';
+
+            const numberEl = document.createElement('span');
+            numberEl.className = 'message-image-number';
+            numberEl.textContent = img.number;
+
+            imgWrapper.appendChild(numberEl);
+            imagesContainer.appendChild(imgWrapper);
+          }
+
+          messageEl.appendChild(imagesContainer);
+        }
 
         const contentEl = document.createElement('div');
         contentEl.className = 'message-content';
@@ -2493,7 +2522,13 @@ function addMessage(role, content, options = {}) {
 
   // Only add user and assistant messages to history for Claude context
   if (role === 'user' || role === 'assistant') {
-    messageHistory.push(message);
+    // Store for history (without thumbnail URLs)
+    const historyMessage = {
+      role,
+      content,
+      images: options.images?.map(img => ({ number: img.number, path: img.path }))
+    };
+    messageHistory.push(historyMessage);
   }
 
   // Mark as unsaved (chat changed)
@@ -2504,50 +2539,80 @@ function addMessage(role, content, options = {}) {
   const messageEl = document.createElement('div');
   messageEl.className = `chat-message ${role}`;
 
-  // Create content wrapper
-  const contentEl = document.createElement('div');
-  contentEl.className = 'message-content';
+  // Add images if present
+  if (options.images && options.images.length > 0) {
+    const imagesContainer = document.createElement('div');
+    imagesContainer.className = 'message-images';
 
-  // Parse content based on role
-  if (role === 'assistant') {
-    // Parse code blocks for assistant messages
-    const parts = parseCodeBlocks(content);
+    for (const img of options.images) {
+      const imgWrapper = document.createElement('div');
+      imgWrapper.className = 'message-image-item';
 
-    parts.forEach(part => {
-      if (part.type === 'text') {
-        // Add text content
-        const textEl = document.createElement('div');
-        textEl.textContent = part.content;
-        contentEl.appendChild(textEl);
-      } else if (part.type === 'code') {
-        // Add collapsible code block
-        const codeBlockEl = createCodeBlockElement(part.language, part.content);
-        contentEl.appendChild(codeBlockEl);
-      }
-    });
-  } else if (role === 'error') {
-    // Error messages: show error text and optional raw response
-    const errorText = document.createElement('div');
-    errorText.textContent = content;
-    contentEl.appendChild(errorText);
+      const imgEl = document.createElement('img');
+      imgEl.src = img.thumbnail;
+      imgEl.alt = `Image ${img.number}`;
 
-    if (options.rawResponse) {
-      const rawEl = document.createElement('div');
-      rawEl.style.marginTop = '8px';
-      rawEl.style.fontSize = '11px';
-      rawEl.style.opacity = '0.8';
-      rawEl.textContent = `Raw: ${options.rawResponse}`;
-      contentEl.appendChild(rawEl);
+      const numberEl = document.createElement('span');
+      numberEl.className = 'message-image-number';
+      numberEl.textContent = img.number;
+
+      imgWrapper.appendChild(imgEl);
+      imgWrapper.appendChild(numberEl);
+      imagesContainer.appendChild(imgWrapper);
     }
-  } else if (role === 'system') {
-    // System messages: simple text (like user messages)
-    contentEl.textContent = content;
-  } else {
-    // User messages: simple text
-    contentEl.textContent = content;
+
+    messageEl.appendChild(imagesContainer);
   }
 
-  messageEl.appendChild(contentEl);
+  // Create content wrapper (only if there's text content)
+  let contentEl = null;
+  if (content) {
+    contentEl = document.createElement('div');
+    contentEl.className = 'message-content';
+  }
+
+  // Parse content based on role (only if we have content)
+  if (content && contentEl) {
+    if (role === 'assistant') {
+      // Parse code blocks for assistant messages
+      const parts = parseCodeBlocks(content);
+
+      parts.forEach(part => {
+        if (part.type === 'text') {
+          // Add text content
+          const textEl = document.createElement('div');
+          textEl.textContent = part.content;
+          contentEl.appendChild(textEl);
+        } else if (part.type === 'code') {
+          // Add collapsible code block
+          const codeBlockEl = createCodeBlockElement(part.language, part.content);
+          contentEl.appendChild(codeBlockEl);
+        }
+      });
+    } else if (role === 'error') {
+      // Error messages: show error text and optional raw response
+      const errorText = document.createElement('div');
+      errorText.textContent = content;
+      contentEl.appendChild(errorText);
+
+      if (options.rawResponse) {
+        const rawEl = document.createElement('div');
+        rawEl.style.marginTop = '8px';
+        rawEl.style.fontSize = '11px';
+        rawEl.style.opacity = '0.8';
+        rawEl.textContent = `Raw: ${options.rawResponse}`;
+        contentEl.appendChild(rawEl);
+      }
+    } else if (role === 'system') {
+      // System messages: simple text (like user messages)
+      contentEl.textContent = content;
+    } else {
+      // User messages: simple text
+      contentEl.textContent = content;
+    }
+
+    messageEl.appendChild(contentEl);
+  }
 
   // Add timestamp
   const timestampEl = document.createElement('div');
@@ -2673,8 +2738,8 @@ async function sendChatMessage() {
   const message = chatInput.value.trim();
 
   // Validate
-  if (!message) {
-    console.log('[Chat] Empty message, ignoring');
+  if (!message && pendingImages.length === 0) {
+    console.log('[Chat] Empty message and no images, ignoring');
     return;
   }
 
@@ -2682,6 +2747,13 @@ async function sendChatMessage() {
     console.log('[Chat] Already processing, ignoring');
     return;
   }
+
+  // Capture pending images before clearing
+  const imagesToSend = [...pendingImages];
+  const imagePaths = imagesToSend.map(img => ({
+    number: img.number,
+    path: img.path
+  }));
 
   // Check for /design command
   let actualMessage = message;
@@ -2714,8 +2786,10 @@ async function sendChatMessage() {
     return;
   }
 
-  // Clear input immediately
+  // Clear input and pending images immediately
   chatInput.value = '';
+  clearPendingImages();
+
   try {
     // Set processing state
     isProcessing = true;
@@ -2723,8 +2797,8 @@ async function sendChatMessage() {
     sendButton.disabled = true;
     sendButton.textContent = 'Sending...';
 
-    // Add user message to chat
-    addMessage('user', message);
+    // Add user message to chat with images
+    addMessage('user', message, { images: imagesToSend });
 
     // Build history for Claude (exclude timestamps, only role + content)
     const history = messageHistory
@@ -2801,13 +2875,15 @@ async function sendChatMessage() {
       console.log('[Chat] Current code length:', currentCode.length);
       console.log('[Chat] History entries:', history.length);
       console.log('[Chat] Click info:', clickInfo ? 'included' : 'none');
+      console.log('[Chat] Images:', imagePaths.length > 0 ? imagePaths : 'none');
 
       // Call IPC
       const result = await ipcRenderer.invoke('send-chat-message', {
         message: messageToSend,
         currentCode,
         history,
-        clickInfo
+        clickInfo,
+        imagePaths
       });
 
       // Clear click info after using it
