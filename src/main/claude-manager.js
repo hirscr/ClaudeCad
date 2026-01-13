@@ -575,13 +575,145 @@ function buildCodeFromSpecPrompt(spec) {
   return prompt;
 }
 
+/**
+ * Build iteration prompt for autonomous iteration mode.
+ *
+ * @param {Object} params
+ * @param {string} params.originalRequest - User's original request
+ * @param {Array} params.referenceImages - Reference images [{number, path}]
+ * @param {string} params.viewportPath - Path to current viewport screenshot
+ * @param {number} params.viewportNumber - Image number of viewport screenshot
+ * @param {string} params.currentCode - Current Build123d code (may be empty on first iteration)
+ * @param {number} params.iteration - Current iteration number
+ * @param {number} params.maxIterations - Maximum iterations
+ * @returns {string} The complete prompt
+ */
+function buildIterationPrompt({
+  originalRequest,
+  referenceImages,
+  viewportPath,
+  viewportNumber,
+  currentCode,
+  iteration,
+  maxIterations
+}) {
+  let prompt = '';
+
+  // Role
+  prompt += '# Role\n\n';
+  prompt += 'You are a CAD assistant in autonomous iteration mode. Your task is to generate Build123d Python code that matches the reference images.\n\n';
+
+  // Iteration context
+  prompt += '# Iteration Context\n\n';
+  prompt += `This is iteration ${iteration} of ${maxIterations}.\n\n`;
+  prompt += `User's original request: "${originalRequest}"\n\n`;
+
+  // Images
+  prompt += '# Images\n\n';
+  prompt += `You have ${referenceImages.length} reference image(s) to match:\n`;
+  for (const img of referenceImages) {
+    prompt += `- Image ${img.number}: ${img.path}\n`;
+  }
+  prompt += `\nCurrent viewport (Image ${viewportNumber}): ${viewportPath}\n\n`;
+
+  // Current state
+  if (currentCode) {
+    prompt += '# Current Code\n\n';
+    prompt += 'Here is the current Build123d code:\n\n';
+    prompt += '```python\n';
+    prompt += currentCode;
+    prompt += '\n```\n\n';
+  } else {
+    prompt += '# Current State\n\n';
+    prompt += 'No code yet. This is the first iteration - generate the initial model.\n\n';
+  }
+
+  // Code requirements (reuse from buildPrompt)
+  prompt += '# Code Requirements\n\n';
+  prompt += 'IMPORTANT: Choose the right pattern based on what you need:\n\n';
+
+  prompt += '## Multi-Colored Shapes (DEFAULT)\n\n';
+  prompt += 'DO NOT use BuildPart() - it fuses shapes into one solid and loses individual colors.\n\n';
+  prompt += 'Rules:\n';
+  prompt += '- Create shapes: Box(), Sphere(), Cylinder(), Cone(), etc.\n';
+  prompt += '- Position shapes: Pos(x, y, z) * shape (NOT shape @ Pos - that doesn\'t work)\n';
+  prompt += '- Assign colors: shape.color = Color("red") or Color(r, g, b)\n';
+  prompt += '- Group with Compound([shape1, shape2, ...]) - keeps shapes separate\n';
+  prompt += '- For oriented cones/cylinders: Pos(x,y,z) * Solid.make_cone(..., plane=...) or Solid.make_cylinder(..., plane=...)\n';
+  prompt += '- CRITICAL: Final result MUST be assigned to variable named `part`\n\n';
+
+  prompt += '## Single Fused Solid (only when needed)\n\n';
+  prompt += 'Use BuildPart() ONLY when you need boolean operations or intentional fusing.\n\n';
+
+  prompt += '## General Rules\n\n';
+  prompt += '- DO NOT include any export lines - handled automatically\n';
+  prompt += '- All measurements in millimeters\n';
+  prompt += '- Named colors: red, blue, green, yellow, white, black, orange, purple, cyan, magenta, gray\n';
+  prompt += '- RGB colors: Color(r, g, b) with values 0-1\n\n';
+
+  prompt += '## Coordinate System\n\n';
+  prompt += 'Directions: +Z=up, -Z=down, +Y=forward, -Y=backward, +X=right, -X=left\n\n';
+
+  // Task
+  prompt += '# Task\n\n';
+  prompt += 'Compare the current viewport to the reference images. Then:\n\n';
+  prompt += '1. If the model matches the reference well enough, respond with ONLY: NO_CHANGES\n';
+  prompt += '2. Otherwise, generate improved Build123d code to better match the reference\n\n';
+
+  prompt += '# Response Format\n\n';
+  prompt += 'Option 1 (model matches): NO_CHANGES\n\n';
+  prompt += 'Option 2 (needs improvement):\n';
+  prompt += '```python\n';
+  prompt += '# Your improved code here\n';
+  prompt += '```\n\n';
+  prompt += 'CRITICAL: Your code MUST end with assigning the final geometry to a variable named `part`\n';
+
+  return prompt;
+}
+
+/**
+ * Parse iteration response from Claude.
+ *
+ * @param {string} responseText - Raw response from Claude
+ * @returns {Object} Parsed response: {type: 'no_changes'|'code'|'invalid', code?, raw}
+ */
+function parseIterationResponse(responseText) {
+  const trimmed = responseText.trim();
+
+  // Check for NO_CHANGES
+  if (trimmed === 'NO_CHANGES' || trimmed.includes('NO_CHANGES')) {
+    return {
+      type: 'no_changes',
+      raw: responseText
+    };
+  }
+
+  // Extract code block
+  const codeMatch = trimmed.match(/```python\n([\s\S]*?)\n```/);
+  if (codeMatch) {
+    return {
+      type: 'code',
+      code: codeMatch[1],
+      raw: responseText
+    };
+  }
+
+  // Invalid response
+  return {
+    type: 'invalid',
+    raw: responseText
+  };
+}
+
 module.exports = {
   sendPrompt,
   buildPrompt,
   buildDesignPrompt,
   buildCodeFromSpecPrompt,
+  buildIterationPrompt,
   parseResponse,
   parseDesignResponse,
+  parseIterationResponse,
   clearContext,
   sendContinuationPrompt,
   refreshContext

@@ -259,9 +259,7 @@ document.getElementById('start-iteration-button').addEventListener('click', () =
     return;
   }
 
-  // Will call startIterationLoop() - implemented in task 10
-  console.log('[Renderer] Start iteration requested');
-  addMessage('system', 'Iteration loop not yet implemented.');
+  startIterationLoop();
 });
 
 // Stop iteration button handler
@@ -3781,6 +3779,117 @@ function hideIterationUI() {
  */
 function updateIterationCounter(current, max) {
   document.getElementById('iteration-counter').textContent = `Iteration ${current} of ${max}`;
+}
+
+/**
+ * Main autonomous iteration loop
+ */
+async function startIterationLoop() {
+  // Capture state at start
+  const maxIterations = parseInt(document.getElementById('max-iterations-input')?.value || '10');
+  const referenceImages = pendingImages.map(img => ({ number: img.number, path: img.path }));
+  const originalRequest = document.getElementById('chat-input').value.trim();
+
+  // Clear input and pending images
+  document.getElementById('chat-input').value = '';
+  clearPendingImages();
+
+  // Initialize state
+  iterationState = {
+    active: true,
+    current: 0,
+    max: maxIterations,
+    stopRequested: false,
+    referenceImages,
+    originalRequest,
+    previousCode: currentCode,
+    unchangedCount: 0
+  };
+
+  // Show UI
+  showIterationUI();
+  addMessage('system', `Starting autonomous iteration (max ${maxIterations}). Click Stop to halt.`);
+
+  // If no current code, generate initial version first
+  if (!currentCode) {
+    addMessage('system', 'No existing model - first iteration will generate initial version.');
+  }
+
+  try {
+    for (let i = 1; i <= maxIterations; i++) {
+      // Check stop request
+      if (iterationState.stopRequested) {
+        addMessage('system', `Stopped at iteration ${i - 1}.`);
+        break;
+      }
+
+      iterationState.current = i;
+      updateIterationCounter(i, maxIterations);
+
+      // 1. Capture current viewport
+      statusText.textContent = `Capturing viewport (${i}/${maxIterations})...`;
+      const viewport = await saveViewportScreenshot();
+
+      // 2. Run iteration step
+      setProcessing('claude');
+      statusText.textContent = `Iteration ${i}/${maxIterations}: Asking Claude...`;
+
+      const result = await ipcRenderer.invoke('run-iteration-step', {
+        originalRequest,
+        referenceImages,
+        viewportPath: viewport.path,
+        viewportNumber: viewport.number,
+        currentCode,
+        iteration: i,
+        maxIterations
+      });
+
+      // Clean up viewport thumbnail
+      URL.revokeObjectURL(viewport.thumbnail);
+
+      // 3. Handle result
+      if (result.type === 'no_changes') {
+        addMessage('assistant', 'Model matches reference. Stopping iteration.');
+        break;
+      }
+
+      if (!result.success) {
+        addMessage('error', `Iteration ${i} failed: ${result.error}`);
+        // Continue trying unless it's a critical error
+        if (result.type === 'error') break;
+        continue;
+      }
+
+      // 4. Check for unchanged code (oscillation detection)
+      if (result.code === iterationState.previousCode) {
+        iterationState.unchangedCount++;
+        if (iterationState.unchangedCount >= 2) {
+          addMessage('system', 'Code unchanged for 2 iterations. Stopping.');
+          break;
+        }
+      } else {
+        iterationState.unchangedCount = 0;
+      }
+      iterationState.previousCode = result.code;
+
+      // 5. Update model
+      currentCode = result.code;
+      await loadShapes(result.shapes, result.volume);
+
+      addMessage('system', `Iteration ${i} complete.`);
+
+      // Small delay to allow UI to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  } catch (err) {
+    addMessage('error', `Iteration loop error: ${err.message}`);
+  } finally {
+    // Cleanup
+    iterationState.active = false;
+    hideIterationUI();
+    setProcessing(null);
+    addMessage('system', `Iteration complete. Final result after ${iterationState.current} iterations.`);
+  }
 }
 
 // Initialize paste handler

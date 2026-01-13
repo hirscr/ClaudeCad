@@ -878,6 +878,87 @@ ipcMain.handle('clear-temp-images', () => {
   return { success: true };
 });
 
+// IPC handler for iteration step (Phase 8, Task 10)
+ipcMain.handle('run-iteration-step', async (event, {
+  originalRequest,
+  referenceImages,
+  viewportPath,
+  viewportNumber,
+  currentCode,
+  iteration,
+  maxIterations
+}) => {
+  try {
+    console.log(`[Main] Running iteration step ${iteration}/${maxIterations}`);
+
+    // Build iteration prompt
+    const prompt = claudeManager.buildIterationPrompt({
+      originalRequest,
+      referenceImages,
+      viewportPath,
+      viewportNumber,
+      currentCode,
+      iteration,
+      maxIterations
+    });
+
+    // Send to Claude
+    const rawResponse = await claudeManager.sendPrompt(prompt, TEMP_IMAGE_DIR);
+
+    // Parse response
+    const parsed = claudeManager.parseIterationResponse(rawResponse);
+
+    if (parsed.type === 'no_changes') {
+      console.log('[Main] Claude determined model matches reference');
+      return {
+        success: true,
+        type: 'no_changes',
+        message: 'Claude determined the model matches the reference.'
+      };
+    }
+
+    if (parsed.type === 'invalid') {
+      console.error('[Main] Invalid Claude response format');
+      return {
+        success: false,
+        type: 'invalid',
+        error: 'Claude response did not match expected format.',
+        raw: parsed.raw
+      };
+    }
+
+    // Execute the new code
+    console.log('[Main] Executing iteration code...');
+    const execResult = await pythonManager.execute(parsed.code);
+
+    if (!execResult.success) {
+      console.error('[Main] Iteration code execution failed:', execResult.error);
+      return {
+        success: false,
+        type: 'execution_error',
+        error: execResult.error,
+        code: parsed.code
+      };
+    }
+
+    console.log('[Main] Iteration step successful');
+    return {
+      success: true,
+      type: 'code',
+      code: parsed.code,
+      shapes: execResult.shapes,
+      volume: execResult.volume
+    };
+  } catch (err) {
+    console.error('[Main] Iteration step error:', err);
+    return {
+      success: false,
+      type: 'error',
+      error: err.message
+    };
+  }
+});
+
 app.whenReady().then(async () => {
   // Initialize temp image directory (Phase 8)
   ensureTempDir();
