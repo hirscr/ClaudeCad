@@ -951,6 +951,9 @@ function finishLoadingShapes(shapeGroup, isFirstLoad) {
   // Apply current render mode
   applyRenderMode(shapeGroup);
 
+  // Sync edge line visibility with current state
+  syncEdgeLineVisibility(shapeGroup);
+
   // Fit camera on first load
   if (isFirstLoad) {
     fitCameraToObject(shapeGroup);
@@ -1363,6 +1366,23 @@ function toggleAxes() {
 
 // Expose for debugging
 window.toggleAxes = toggleAxes;
+
+/**
+ * Sync edge line visibility with the current state
+ * Called when loading new models to ensure edge lines match the toggle button state
+ * @param {THREE.Object3D} mesh - The mesh to sync edge lines for
+ */
+function syncEdgeLineVisibility(mesh) {
+  if (!mesh) return;
+
+  mesh.traverse((child) => {
+    if (child.isLineSegments) {
+      child.visible = edgeLinesVisible;
+    }
+  });
+
+  console.log(`[EdgeLines] Synced to state: ${edgeLinesVisible ? 'visible' : 'hidden'}`);
+}
 
 /**
  * Toggle edge lines visibility on/off
