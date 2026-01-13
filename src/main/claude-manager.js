@@ -385,10 +385,110 @@ async function refreshContext(currentCode, cleanedHistory = []) {
   await sendContinuationPrompt(currentCode, cleanedHistory);
 }
 
+/**
+ * Build prompt for design mode (spec generation, not code).
+ *
+ * @param {string} userMessage - What the user wants to design
+ * @param {string} currentSpec - Current spec content (for refinements)
+ * @param {Array} chatHistory - Previous messages
+ * @returns {string} The complete prompt
+ */
+function buildDesignPrompt(userMessage, currentSpec = '', chatHistory = []) {
+  let prompt = '';
+
+  // Role
+  prompt += '# Role\n\n';
+  prompt += 'You are a CAD design assistant. You help users plan 3D models by creating detailed specifications.\n';
+  prompt += 'You do NOT generate code in this mode. You generate structured specs.\n\n';
+
+  // Output format
+  prompt += '# Output Format\n\n';
+  prompt += 'Generate a structured specification in markdown format with these sections:\n\n';
+  prompt += '## Model Name and Description\n';
+  prompt += 'Brief description of what we\'re building.\n\n';
+  prompt += '## Coordinate System\n';
+  prompt += '- Z = up/down, Y = forward/back, X = left/right\n';
+  prompt += '- Units: millimeters\n\n';
+  prompt += '## Components\n';
+  prompt += 'List each component with:\n';
+  prompt += '- Primitive type (Box, Sphere, Cylinder, Cone, etc.)\n';
+  prompt += '- Exact dimensions in mm\n';
+  prompt += '- Position (center point x, y, z)\n';
+  prompt += '- Color\n';
+  prompt += '- Any boolean operations (union, subtract)\n\n';
+  prompt += '## Optional Details\n';
+  prompt += '- Fillets, chamfers\n';
+  prompt += '- Holes\n';
+  prompt += '- Patterns\n\n';
+
+  // Reference example
+  prompt += '# Example Spec Format\n\n';
+  prompt += '```markdown\n';
+  prompt += '# Snowman (50mm tall)\n\n';
+  prompt += '## Coordinate System\n';
+  prompt += '- Z = up/down, Y = forward/back, X = left/right\n';
+  prompt += '- Units: millimeters\n\n';
+  prompt += '## 1) Base sphere\n';
+  prompt += '- Sphere: diameter 30mm\n';
+  prompt += '- Center at (0, 0, 15)\n';
+  prompt += '- Color: white\n\n';
+  prompt += '## 2) Middle sphere\n';
+  prompt += '- Sphere: diameter 22mm\n';
+  prompt += '- Center at (0, 0, 37)\n';
+  prompt += '- Color: white\n';
+  prompt += '```\n\n';
+
+  // Constraints (same as code mode)
+  prompt += '# Constraints\n\n';
+  prompt += '- Only primitives: Box, Sphere, Cylinder, Cone\n';
+  prompt += '- No ellipsoids (only uniform scaling)\n';
+  prompt += '- No freeform surfaces\n';
+  prompt += '- No text/fonts\n';
+  prompt += '- Keep it buildable with basic CAD operations\n\n';
+
+  // Current spec (if refining)
+  if (currentSpec && currentSpec.trim()) {
+    prompt += '# Current Spec (refine this)\n\n';
+    prompt += '```markdown\n';
+    prompt += currentSpec;
+    prompt += '\n```\n\n';
+  }
+
+  // Chat history (last 5)
+  if (chatHistory && chatHistory.length > 0) {
+    prompt += '# Conversation History\n\n';
+    const recentHistory = chatHistory.slice(-5);
+    for (const msg of recentHistory) {
+      prompt += `**${msg.role}:** ${msg.content}\n\n`;
+    }
+  }
+
+  // User request
+  prompt += '# User Request\n\n';
+  prompt += userMessage;
+
+  return prompt;
+}
+
+/**
+ * Parse design mode response (markdown spec, not code).
+ *
+ * @param {string} responseText - The raw response from Claude CLI
+ * @returns {Object} { spec: string, raw: string }
+ */
+function parseDesignResponse(responseText) {
+  return {
+    spec: responseText.trim(),
+    raw: responseText
+  };
+}
+
 module.exports = {
   sendPrompt,
   buildPrompt,
+  buildDesignPrompt,
   parseResponse,
+  parseDesignResponse,
   clearContext,
   sendContinuationPrompt,
   refreshContext
