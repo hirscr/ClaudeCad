@@ -771,3 +771,50 @@ canvas {
   background: #4a9eff;
 }
 
+/* Iteration Controls */
+#iteration-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #2d2d2d;
+  border: 1px solid #3c3c3c;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+#iteration-controls.hidden {
+  display: none;
+}
+
+#iteration-counter {
+  font-size: 14px;
+  color: #4ec9b0;  /* Teal for active state */
+  font-weight: bold;
+}
+
+#iteration-stop-button {
+  background: #f44747;
+  color: white;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.15s ease;
+}
+
+#iteration-stop-button:hover:not(:disabled) {
+  background: #d43d3d;
+}
+
+#iteration-stop-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#start-iteration-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

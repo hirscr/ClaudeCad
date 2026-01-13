@@ -27,6 +27,14 @@
         <button id="clear-button" class="header-button" title="Clear Project (Cmd+Shift+K)">
           <span class="button-icon">🗑️</span>
         </button>
+        <span class="toolbar-separator"></span>
+        <button id="start-iteration-button" class="header-button" title="Start autonomous iteration">
+          <span class="button-icon">🔁</span>
+        </button>
+        <div id="iteration-controls" class="hidden">
+          <span id="iteration-counter">Iteration 0 of 10</span>
+          <button id="iteration-stop-button" class="danger">Stop</button>
+        </div>
       </div>
       <div class="header-right">
         <div id="color-palette" class="color-palette hidden">

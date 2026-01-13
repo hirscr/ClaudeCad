@@ -167,6 +167,18 @@ let renderMode = 'solid'; // 'solid' | 'wireframe' | 'xray'
 // Design mode state
 let designMode = false;
 
+// Iteration state
+let iterationState = {
+  active: false,
+  current: 0,
+  max: 10,
+  stopRequested: false,
+  referenceImages: [],  // Paths to reference images
+  originalRequest: '',
+  previousCode: null,   // For detecting no-change convergence
+  unchangedCount: 0     // Count consecutive unchanged iterations
+};
+
 // Pulse animation state (for red pulsing during Claude processing)
 let pulseAnimationId = null;
 let originalColors = new Map(); // Map<material, {color: Color, emissive: Color}>
@@ -231,6 +243,35 @@ document.getElementById('redo-button').addEventListener('click', () => {
 
 document.getElementById('clear-button').addEventListener('click', () => {
   clearProject();
+});
+
+// Start iteration button handler
+document.getElementById('start-iteration-button').addEventListener('click', () => {
+  // Validate: need at least one reference image
+  if (pendingImages.length === 0) {
+    addMessage('error', 'Paste at least one reference image before starting iteration.');
+    return;
+  }
+
+  const userMessage = document.getElementById('chat-input').value.trim();
+  if (!userMessage) {
+    addMessage('error', 'Enter a description of what to build.');
+    return;
+  }
+
+  // Will call startIterationLoop() - implemented in task 10
+  console.log('[Renderer] Start iteration requested');
+  addMessage('system', 'Iteration loop not yet implemented.');
+});
+
+// Stop iteration button handler
+document.getElementById('iteration-stop-button').addEventListener('click', () => {
+  if (iterationState.active) {
+    iterationState.stopRequested = true;
+    document.getElementById('iteration-stop-button').textContent = 'Stopping...';
+    document.getElementById('iteration-stop-button').disabled = true;
+    console.log('[Renderer] Stop requested');
+  }
 });
 
 document.getElementById('axes-button').addEventListener('click', () => {
@@ -3711,6 +3752,35 @@ function updatePendingImagesUI() {
     item.appendChild(removeBtn);
     container.appendChild(item);
   }
+}
+
+/**
+ * Show iteration UI controls
+ */
+function showIterationUI() {
+  document.getElementById('iteration-controls').classList.remove('hidden');
+  document.getElementById('start-iteration-button').disabled = true;
+  document.getElementById('chat-input').disabled = true;
+  document.getElementById('send-button').disabled = true;
+}
+
+/**
+ * Hide iteration UI controls
+ */
+function hideIterationUI() {
+  document.getElementById('iteration-controls').classList.add('hidden');
+  document.getElementById('start-iteration-button').disabled = false;
+  document.getElementById('chat-input').disabled = false;
+  document.getElementById('send-button').disabled = false;
+}
+
+/**
+ * Update iteration counter display
+ * @param {number} current - Current iteration number
+ * @param {number} max - Maximum iterations
+ */
+function updateIterationCounter(current, max) {
+  document.getElementById('iteration-counter').textContent = `Iteration ${current} of ${max}`;
 }
 
 // Initialize paste handler
