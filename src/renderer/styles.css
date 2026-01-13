@@ -793,6 +793,13 @@ canvas {
   font-weight: bold;
 }
 
+#token-usage {
+  font-size: 12px;
+  color: #888888;  /* Secondary text color, will be overridden dynamically */
+  margin-left: 12px;
+  font-family: 'Courier New', monospace;
+}
+
 #iteration-stop-button {
   background: #f44747;
   color: white;

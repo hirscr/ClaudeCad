@@ -167,6 +167,24 @@ let renderMode = 'solid'; // 'solid' | 'wireframe' | 'xray'
 // Design mode state
 let designMode = false;
 
+// Token tracking configuration
+const TOKEN_CONFIG = {
+  // Conservative estimate: ~0.3 tokens per character (accounts for images too)
+  CHARS_PER_TOKEN: 3.3,
+
+  // Estimated context limits by model
+  CONTEXT_LIMITS: {
+    sonnet: 200000,
+    opus: 200000
+  },
+
+  // Warning threshold
+  WARNING_THRESHOLD: 0.6,  // 60%
+
+  // Stop threshold
+  STOP_THRESHOLD: 0.7      // 70%
+};
+
 // Iteration state
 let iterationState = {
   active: false,
@@ -176,7 +194,9 @@ let iterationState = {
   referenceImages: [],  // Paths to reference images
   originalRequest: '',
   previousCode: null,   // For detecting no-change convergence
-  unchangedCount: 0     // Count consecutive unchanged iterations
+  unchangedCount: 0,    // Count consecutive unchanged iterations
+  estimatedTokens: 0,   // Estimated token usage for current iteration loop
+  warningShown: false   // Whether we've shown the warning message
 };
 
 // Pulse animation state (for red pulsing during Claude processing)
@@ -3773,6 +3793,55 @@ function hideIterationUI() {
 }
 
 /**
+ * Estimate token count from text
+ * @param {string} text - Text to estimate
+ * @returns {number} Estimated token count
+ */
+function estimateTokens(text) {
+  if (!text) return 0;
+  return Math.ceil(text.length / TOKEN_CONFIG.CHARS_PER_TOKEN);
+}
+
+/**
+ * Estimate token count for images
+ * @param {number} count - Number of images
+ * @returns {number} Estimated token count
+ */
+function estimateImageTokens(count) {
+  // Images are roughly 1000-2000 tokens each depending on size
+  // Use conservative estimate
+  return count * 1500;
+}
+
+/**
+ * Get current context usage statistics
+ * @param {string} model - Model name ('sonnet' or 'opus')
+ * @returns {Object} Context usage info
+ */
+function getContextUsage(model = 'sonnet') {
+  const limit = TOKEN_CONFIG.CONTEXT_LIMITS[model] || 200000;
+  const usage = iterationState.estimatedTokens / limit;
+  return {
+    tokens: iterationState.estimatedTokens,
+    limit,
+    percentage: Math.round(usage * 100),
+    ratio: usage
+  };
+}
+
+/**
+ * Update token usage display in UI
+ */
+function updateTokenDisplay() {
+  const usage = getContextUsage('sonnet'); // Assume sonnet for now
+  const display = document.getElementById('token-usage');
+  if (display) {
+    display.textContent = `~${Math.round(usage.tokens / 1000)}k tokens (${usage.percentage}%)`;
+    display.style.color = usage.ratio >= TOKEN_CONFIG.WARNING_THRESHOLD ? '#dcdcaa' : '#888888';
+  }
+}
+
+/**
  * Update iteration counter display
  * @param {number} current - Current iteration number
  * @param {number} max - Maximum iterations
@@ -3803,7 +3872,9 @@ async function startIterationLoop() {
     referenceImages,
     originalRequest,
     previousCode: currentCode,
-    unchangedCount: 0
+    unchangedCount: 0,
+    estimatedTokens: 0,
+    warningShown: false
   };
 
   // Show UI
@@ -3875,6 +3946,30 @@ async function startIterationLoop() {
       // 5. Update model
       currentCode = result.code;
       await loadShapes(result.shapes, result.volume);
+
+      // 6. Track token usage
+      const promptTokens = estimateTokens(originalRequest) +
+                           estimateTokens(currentCode) +
+                           estimateImageTokens(referenceImages.length + 1); // +1 for viewport
+      const responseTokens = estimateTokens(result.code || '');
+
+      iterationState.estimatedTokens += promptTokens + responseTokens;
+
+      // Check thresholds
+      const usage = getContextUsage('sonnet');
+
+      if (usage.ratio >= TOKEN_CONFIG.STOP_THRESHOLD) {
+        addMessage('warning', `Context limit reached (${usage.percentage}%). Stopping iteration.`);
+        break;
+      }
+
+      if (usage.ratio >= TOKEN_CONFIG.WARNING_THRESHOLD && !iterationState.warningShown) {
+        addMessage('warning', `Context usage at ${usage.percentage}%. Will stop at ${Math.round(TOKEN_CONFIG.STOP_THRESHOLD * 100)}%.`);
+        iterationState.warningShown = true;
+      }
+
+      // Update token display if available
+      updateTokenDisplay();
 
       addMessage('system', `Iteration ${i} complete.`);
 
