@@ -8,25 +8,34 @@ const { spawn } = require('child_process');
 /**
  * Send a prompt to Claude Code CLI and get a response.
  *
- * @param {string} userMessage - The user's natural language request
- * @param {string} currentCode - The current Build123d code (empty string if none)
- * @param {Array} chatHistory - Array of {role, content} messages
- * @param {Object} clickInfo - Optional click information {position: {x, y, z}, normal: {x, y, z}}
+ * @param {string} prompt - The complete prompt text to send
+ * @param {string} tempImageDir - Path to temp image directory (for --add-dir), optional
  * @returns {Promise<string>} Claude's raw response text
  */
-function sendPrompt(userMessage, currentCode = '', chatHistory = [], clickInfo = null) {
+function sendPrompt(prompt, tempImageDir = null) {
   return new Promise((resolve, reject) => {
-    // Build the full prompt
-    const prompt = buildPrompt(userMessage, currentCode, chatHistory, clickInfo);
-
     console.log('[ClaudeManager] Sending prompt to Claude CLI...');
     console.log('[ClaudeManager] Prompt length:', prompt.length);
+    console.log('[ClaudeManager] Temp image dir:', tempImageDir || 'none');
+
+    // Build Claude CLI args
+    const args = ['--print'];
+
+    // Add image directory access if provided
+    if (tempImageDir) {
+      args.push('--add-dir', tempImageDir);
+    }
 
     // Spawn Claude CLI process
     // Use stdin to pass prompt (avoids shell escaping issues with backticks)
-    const process = spawn('claude', ['--print'], {
+    const process = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe']
     });
+
+    // Debug logging for images
+    if (tempImageDir) {
+      console.log('[ClaudeManager] Full prompt preview:', prompt.substring(0, 500) + '...');
+    }
 
     // Write prompt to stdin and close it
     process.stdin.write(prompt);
@@ -92,20 +101,31 @@ function sendPrompt(userMessage, currentCode = '', chatHistory = [], clickInfo =
 
 /**
  * Build the full prompt to send to Claude.
- * Includes system context, current code, chat history, click info, and user message.
+ * Includes system context, current code, chat history, click info, images, and user message.
  *
  * @param {string} userMessage - The user's current request
  * @param {string} currentCode - The current Build123d code
  * @param {Array} chatHistory - Previous messages (last 5 max)
  * @param {Object} clickInfo - Optional click information {position: {x, y, z}, normal: {x, y, z}}
+ * @param {Array} imagePaths - Optional array of { number, path } for reference images
  * @returns {string} The complete prompt
  */
-function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
+function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null, imagePaths = null) {
   let prompt = '';
 
   // System context
   prompt += '# Role\n\n';
   prompt += 'You are a CAD assistant that generates Build123d Python code for 3D models.\n\n';
+
+  // Add image references if present (before requirements)
+  if (imagePaths && imagePaths.length > 0) {
+    prompt += '# Reference Images\n\n';
+    prompt += 'The user has provided the following images:\n';
+    for (const img of imagePaths) {
+      prompt += `- Image ${img.number}: ${img.path}\n`;
+    }
+    prompt += '\n';
+  }
 
   // Code requirements - two modes
   prompt += '# Code Requirements\n\n';
@@ -346,6 +366,7 @@ function sendContinuationPrompt(currentCode, cleanedHistory = []) {
     prompt += '# Status\n\n';
     prompt += 'Context has been refreshed. The code above is the current state. Await next user command.\n';
 
+    // Use the updated spawn logic (no images for continuation)
     const process = spawn('claude', ['--print'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });

@@ -194,13 +194,14 @@ ipcMain.handle('execute-code', async (event, code) => {
   }
 });
 
-ipcMain.handle('send-chat-message', async (event, { message, currentCode, history, clickInfo }) => {
+ipcMain.handle('send-chat-message', async (event, { message, currentCode, history, clickInfo, imagePaths }) => {
   try {
     console.log('[Main] Received send-chat-message request');
     console.log('[Main] Message:', message);
     console.log('[Main] Current code length:', currentCode?.length || 0);
     console.log('[Main] History length:', history?.length || 0);
     console.log('[Main] Click info:', clickInfo ? 'present' : 'none');
+    console.log('[Main] Image paths:', imagePaths ? imagePaths.length : 0);
 
     // Track retry state
     let attemptCount = 0;
@@ -212,8 +213,19 @@ ipcMain.handle('send-chat-message', async (event, { message, currentCode, histor
       attemptCount++;
       console.log(`[Main] Attempt ${attemptCount}/${maxAttempts}`);
 
-      // Send prompt to Claude
-      const rawResponse = await claudeManager.sendPrompt(currentMessage, currentCode, history, clickInfo);
+      // Build prompt with images
+      const prompt = claudeManager.buildPrompt(currentMessage, currentCode, history, clickInfo, imagePaths);
+
+      // Get temp directory if images are present
+      const tempImageDir = imagePaths && imagePaths.length > 0 ? TEMP_IMAGE_DIR : null;
+
+      // Debug log image paths
+      if (imagePaths && imagePaths.length > 0) {
+        console.log('[Main] Image paths being sent:', JSON.stringify(imagePaths));
+      }
+
+      // Send prompt to Claude with image directory access
+      const rawResponse = await claudeManager.sendPrompt(prompt, tempImageDir);
       console.log('[Main] Claude response received, length:', rawResponse.length);
 
       // Parse response
@@ -501,7 +513,7 @@ ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, c
   }
 });
 
-// Handle design mode message
+// IPC handler for design mode message
 ipcMain.handle('send-design-message', async (event, { message, currentSpec, history }) => {
   try {
     console.log('[Main] Design mode message received');
@@ -509,8 +521,8 @@ ipcMain.handle('send-design-message', async (event, { message, currentSpec, hist
     // Build design prompt
     const prompt = claudeManager.buildDesignPrompt(message, currentSpec, history);
 
-    // Send to Claude
-    const response = await claudeManager.sendPrompt(prompt);
+    // Send to Claude (no images for design mode)
+    const response = await claudeManager.sendPrompt(prompt, null);
 
     // Parse response (just return the spec text)
     const parsed = claudeManager.parseDesignResponse
@@ -530,7 +542,7 @@ ipcMain.handle('send-design-message', async (event, { message, currentSpec, hist
   }
 });
 
-// Handle build-from-spec: generate code from design spec, execute, return mesh
+// IPC handler for build-from-spec: generate code from design spec, execute, return mesh
 ipcMain.handle('build-from-spec', async (event, { spec }) => {
   try {
     console.log('[Main] Build from spec request received');
@@ -557,9 +569,9 @@ ipcMain.handle('build-from-spec', async (event, { spec }) => {
       // Build prompt for code generation
       const prompt = claudeManager.buildCodeFromSpecPrompt(currentSpec);
 
-      // Send to Claude
+      // Send to Claude (no images for spec-based generation)
       console.log('[Main] Sending spec to Claude for code generation...');
-      const response = await claudeManager.sendPrompt(prompt);
+      const response = await claudeManager.sendPrompt(prompt, null);
 
       // Parse response
       const parsed = claudeManager.parseResponse(response);
