@@ -103,6 +103,9 @@ let currentMesh = null;
 // Track current model volume (from Build123d, in cubic mm)
 let currentVolume = 0;
 
+// Track current shapes array for save functionality
+let currentShapes = [];
+
 // Track current Build123d code (for iterative editing)
 let currentCode = '';
 
@@ -137,6 +140,7 @@ let clickMarkerTimeout = null;
 
 // Hover state tracking
 let hoveredMesh = null;
+let edgeLinesVisible = true;
 let isDragging = false;
 let lastHoverCheck = 0;
 const hoverCheckInterval = 33; // ~30fps (33ms)
@@ -226,6 +230,10 @@ document.getElementById('axes-button').addEventListener('click', () => {
   toggleAxes();
 });
 
+document.getElementById('highlight-button').addEventListener('click', () => {
+  toggleHighlight();
+});
+
 document.getElementById('measure-button').addEventListener('click', () => {
   toggleMeasureMode();
 });
@@ -277,7 +285,7 @@ const statusStats = document.getElementById('status-stats');
 // Toolbar buttons that should be disabled during processing
 const toolbarButtonIds = [
   'open-button', 'save-button', 'undo-button', 'redo-button', 'clear-button',
-  'axes-button', 'measure-button', 'refresh-context-button', 'export-stl-button',
+  'axes-button', 'highlight-button', 'measure-button', 'refresh-context-button', 'export-stl-button',
   'fit-view-button', 'solid-button', 'wireframe-button', 'xray-button'
 ];
 
@@ -585,16 +593,17 @@ function applyFeatureColors() {
   console.log(`[FeatureColors] Applied ${appliedCount} color override(s)`);
 }
 
-// Load glTF mesh from file path
-// colors: optional object mapping feature index to hex color (e.g., {0: "#ff0000", 1: "#0000ff"})
-function loadMesh(path, volume = 0, colors = null) {
+// Load multiple shapes from individual glTF files
+// shapes: array of {mesh_path, color, label}
+// volume: total volume in mm³
+function loadShapes(shapes, volume = 0) {
   setProcessing('python');
 
   // Store volume for stats display
   currentVolume = volume;
 
-  // Store colors to apply after load
-  const sourceColors = colors;
+  // Store shapes for save functionality
+  currentShapes = shapes;
 
   // Clear hover state when loading new mesh
   if (hoveredMesh) {
@@ -634,217 +643,138 @@ function loadMesh(path, volume = 0, colors = null) {
     currentMesh = null;
   }
 
-  // Create loader
-  const loader = new GLTFLoader();
-
-  // Convert to file:// URL if not already
-  const fileUrl = path.startsWith('file://') ? path : `file://${path}`;
-
-  // Load the glTF file
-  loader.load(
-    fileUrl,
-    // onLoad callback
-    (gltf) => {
-      const loadedMesh = gltf.scene;
-
-      // Scale from mm (Build123d) to scene units (glTF uses meters)
-      loadedMesh.scale.set(1000, 1000, 1000);
-
-      // Rotate from Y-up (glTF) to Z-up (scene)
-      loadedMesh.rotation.x = Math.PI / 2;
-
-      // Assign feature indices to all child meshes (for click detection)
-      let featureIndex = 0;
-      loadedMesh.traverse((child) => {
-        if (child.isMesh) {
-          child.userData.featureIndex = featureIndex++;
+  // Check for first load (test cube removal)
+  const isFirstLoad = testCube !== null;
+  if (testCube) {
+    scene.remove(testCube);
+    testCube.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => mat.dispose());
+        } else {
+          child.material.dispose();
         }
-      });
+      }
+    });
+    testCube = null;
+    console.log('Test cube removed');
+  }
 
-      // Apply material and edge lines to all meshes
-      // Preserve source colors if present, otherwise apply accent blue
-      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6ab0ff });
-      let meshCount = 0;
-      let preservedCount = 0;
-      const defaultGrey = new THREE.Color(0x808080);
+  // Handle empty shapes array
+  if (!shapes || shapes.length === 0) {
+    console.log('[LoadShapes] No shapes to load');
+    hideLoading();
+    updateModelStats(0);
+    return;
+  }
 
-      loadedMesh.traverse((child) => {
-        if (child.isMesh) {
-          meshCount++;
+  // Create parent group for all shapes
+  const shapeGroup = new THREE.Group();
+  shapeGroup.name = 'shapeGroup';
+  // Rotate entire group from Z-up (Build123d) to Y-up (Three.js)
+  // shapeGroup.rotation.x = -Math.PI / 2;  // DISABLED - testing if export is already Y-up
 
-          // Check if material has a meaningful color (not default grey)
-          const hasSourceColor = child.material &&
-            child.material.color &&
-            !child.material.color.equals(defaultGrey);
+  // Track loading progress
+  let loadedCount = 0;
+  const totalCount = shapes.length;
+  const loader = new GLTFLoader();
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6ab0ff });
 
-          if (hasSourceColor) {
-            // Preserve source color, just ensure DoubleSide
-            child.material.side = THREE.DoubleSide;
-            preservedCount++;
-          } else {
-            // Dispose old material and apply default accent color
-            if (child.material) {
-              if (Array.isArray(child.material)) {
-                child.material.forEach(mat => mat.dispose());
-              } else {
-                child.material.dispose();
-              }
-            }
+  shapes.forEach((shapeData, shapeIndex) => {
+    const fileUrl = shapeData.mesh_path.startsWith('file://')
+      ? shapeData.mesh_path
+      : `file://${shapeData.mesh_path}`;
+
+    loader.load(
+      fileUrl,
+      (gltf) => {
+        const shapeMesh = gltf.scene;
+
+        // Scale from mm (Build123d) to scene units (glTF uses meters)
+        shapeMesh.scale.set(1000, 1000, 1000);
+
+        // Store shape metadata
+        shapeMesh.userData.shapeIndex = shapeIndex;
+        shapeMesh.userData.shapeLabel = shapeData.label;
+        shapeMesh.userData.shapeColor = shapeData.color;
+
+        // Apply color and edge lines to all child meshes
+        shapeMesh.traverse((child) => {
+          if (child.isMesh) {
+            // Use shapeIndex as featureIndex for selection
+            child.userData.featureIndex = shapeIndex;
+            child.userData.shapeLabel = shapeData.label;
+
+            // Apply shape color (or default accent)
+            const color = shapeData.color || '#4a9eff';
             child.material = new THREE.MeshStandardMaterial({
-              color: 0x4a9eff,
+              color: color,
               side: THREE.DoubleSide
             });
-          }
 
-          // Add edge lines
-          const edges = new THREE.EdgesGeometry(child.geometry);
-          const edgeLines = new THREE.LineSegments(edges, edgeMaterial);
-          child.add(edgeLines);
-        }
-      });
-      console.log(`Processed ${meshCount} mesh(es): preserved ${preservedCount} color(s), applied accent to ${meshCount - preservedCount}`);
-
-      // Remove test cube on first successful load
-      const isFirstLoad = testCube !== null;
-      if (testCube) {
-        scene.remove(testCube);
-        testCube.traverse((child) => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) {
-            if (Array.isArray(child.material)) {
-              child.material.forEach(mat => mat.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        });
-        testCube = null;
-        console.log('Test cube removed');
-      }
-
-      // Add mesh to scene
-      scene.add(loadedMesh);
-      currentMesh = loadedMesh;
-
-      // Apply source colors from Build123d code (if provided)
-      // Uses spatial clustering since Build123d splits shapes into multiple meshes
-      if (sourceColors && Object.keys(sourceColors).length > 0) {
-        const colorKeys = Object.keys(sourceColors);
-        const numColors = colorKeys.length;
-        console.log(`[LoadMesh] Applying ${numColors} source color(s) via spatial clustering`);
-
-        // Collect all meshes with their bounding box centers
-        const meshes = [];
-        loadedMesh.traverse((child) => {
-          if (child.isMesh) {
-            const box = new THREE.Box3().setFromObject(child);
-            const center = box.getCenter(new THREE.Vector3());
-            meshes.push({
-              mesh: child,
-              centerX: center.x,
-              centerY: center.y,
-              centerZ: center.z
-            });
+            // Add edge lines
+            const edges = new THREE.EdgesGeometry(child.geometry);
+            const edgeLines = new THREE.LineSegments(edges, edgeMaterial.clone());
+            child.add(edgeLines);
           }
         });
 
-        console.log(`[LoadMesh] Found ${meshes.length} meshes to color`);
+        // Add to group
+        shapeGroup.add(shapeMesh);
+        loadedCount++;
 
-        if (meshes.length === 0) {
-          console.log('[LoadMesh] No meshes found');
-        } else if (numColors === 1) {
-          // Single color: apply to all meshes
-          const hexColor = sourceColors[colorKeys[0]];
-          console.log(`[LoadMesh] Single color mode: applying ${hexColor} to all meshes`);
-          meshes.forEach(({ mesh }) => {
-            if (mesh.material) {
-              mesh.material = mesh.material.clone();
-            }
-            mesh.material.color.set(hexColor);
-          });
-        } else {
-          // Multiple colors: cluster by X position (for "side by side" arrangements)
-          // Sort meshes by X coordinate
-          meshes.sort((a, b) => a.centerX - b.centerX);
+        console.log(`[LoadShapes] Loaded shape ${shapeIndex} (${shapeData.label}): color=${shapeData.color || 'default'}`);
 
-          // Find natural clustering point(s) - look for largest gap in X positions
-          const gaps = [];
-          for (let i = 0; i < meshes.length - 1; i++) {
-            gaps.push({
-              index: i,
-              gap: meshes[i + 1].centerX - meshes[i].centerX
-            });
-          }
+        // Check if all shapes loaded
+        if (loadedCount === totalCount) {
+          finishLoadingShapes(shapeGroup, isFirstLoad);
+        }
+      },
+      null,
+      (error) => {
+        console.error(`[LoadShapes] Error loading shape ${shapeIndex}:`, error);
+        loadedCount++;
 
-          // Sort gaps by size (largest first) and take top (numColors - 1) gaps
-          gaps.sort((a, b) => b.gap - a.gap);
-          const splitIndices = gaps.slice(0, numColors - 1).map(g => g.index).sort((a, b) => a - b);
-
-          console.log(`[LoadMesh] Split indices for ${numColors} groups:`, splitIndices);
-
-          // Assign color groups
-          let colorIndex = 0;
-          let nextSplitIdx = 0;
-
-          meshes.forEach(({ mesh }, i) => {
-            // Check if we've passed a split point
-            if (nextSplitIdx < splitIndices.length && i > splitIndices[nextSplitIdx]) {
-              colorIndex++;
-              nextSplitIdx++;
-            }
-
-            const hexColor = sourceColors[colorIndex] || sourceColors[String(colorIndex)];
-            if (hexColor) {
-              if (mesh.material) {
-                mesh.material = mesh.material.clone();
-              }
-              mesh.material.color.set(hexColor);
-              console.log(`[LoadMesh] Mesh ${i} (X=${mesh.userData.centerX?.toFixed(1) || 'N/A'}) -> color group ${colorIndex} (${hexColor})`);
-            }
-          });
+        // Still finish if some shapes loaded
+        if (loadedCount === totalCount) {
+          finishLoadingShapes(shapeGroup, isFirstLoad);
         }
       }
+    );
+  });
+}
 
-      // Apply feature color overrides if any (user-set colors override source colors)
-      applyFeatureColors();
+// Finish loading shapes and add to scene
+function finishLoadingShapes(shapeGroup, isFirstLoad) {
+  if (shapeGroup.children.length === 0) {
+    console.error('[LoadShapes] No shapes loaded successfully');
+    statusText.textContent = 'Error: Failed to load any shapes';
+    statusText.style.color = '#f44747';
+    hideLoading();
+    return;
+  }
 
-      // Apply current render mode
-      applyRenderMode(loadedMesh);
+  // Add to scene
+  scene.add(shapeGroup);
+  currentMesh = shapeGroup;
 
-      // Only fit camera on first load, preserve user's camera position afterward
-      if (isFirstLoad) {
-        fitCameraToObject(loadedMesh);
-      }
+  // Apply feature color overrides (user-set colors)
+  applyFeatureColors();
 
-      // Update model statistics in status bar
-      updateModelStats(currentVolume);
+  // Apply current render mode
+  applyRenderMode(shapeGroup);
 
-      hideLoading();
-      console.log('Mesh loaded successfully:', path);
-    },
-    // onProgress callback
-    (xhr) => {
-      const percentComplete = (xhr.loaded / xhr.total) * 100;
-      console.log(`Loading: ${percentComplete.toFixed(2)}%`);
-    },
-    // onError callback
-    (error) => {
-      console.error('Error loading mesh:', error);
+  // Fit camera on first load
+  if (isFirstLoad) {
+    fitCameraToObject(shapeGroup);
+  }
 
-      // Show error to user
-      statusText.textContent = `Error: Failed to load mesh`;
-      statusText.style.color = '#f44747';
+  // Update stats
+  updateModelStats(currentVolume);
 
-      setTimeout(() => {
-        statusText.textContent = 'Ready';
-        statusText.style.color = '#888888';
-      }, 3000);
-
-      hideLoading();
-
-      // Keep previous mesh visible (if any)
-    }
-  );
+  hideLoading();
+  console.log(`[LoadShapes] Successfully loaded ${shapeGroup.children.length} shapes`);
 }
 
 /**
@@ -1014,8 +944,14 @@ async function executeCode(code) {
     console.log('[Renderer] Execution result:', result);
 
     if (result.success) {
-      // Load the mesh with volume data
-      loadMesh(result.mesh_path, result.volume || 0);
+      if (result.empty) {
+        // Empty geometry - clear viewport
+        clearViewport();
+        hideLoading();
+      } else {
+        // Load shapes with volume data
+        loadShapes(result.shapes, result.volume || 0);
+      }
     } else {
       // Show error
       console.error('[Renderer] Execution failed:', result.error);
@@ -1196,6 +1132,30 @@ function toggleAxes() {
 
 // Expose for debugging
 window.toggleAxes = toggleAxes;
+
+/**
+ * Toggle edge lines visibility on/off
+ */
+function toggleHighlight() {
+  edgeLinesVisible = !edgeLinesVisible;
+
+  // Toggle visibility of all LineSegments in currentMesh
+  if (currentMesh) {
+    currentMesh.traverse((child) => {
+      if (child.isLineSegments) {
+        child.visible = edgeLinesVisible;
+      }
+    });
+  }
+
+  const highlightButton = document.getElementById('highlight-button');
+  highlightButton.classList.toggle('active', edgeLinesVisible);
+
+  console.log(`[EdgeLines] Toggled: ${edgeLinesVisible ? 'visible' : 'hidden'}`);
+}
+
+// Expose for debugging
+window.toggleHighlight = toggleHighlight;
 
 // ============================================================
 // RENDER MODE FUNCTIONALITY
@@ -1413,7 +1373,7 @@ function handleMeasureClick(point) {
 window.setProcessing = setProcessing;
 window.showLoading = showLoading;
 window.hideLoading = hideLoading;
-window.loadMesh = loadMesh;
+window.loadShapes = loadShapes;
 window.executeCode = executeCode;
 window.toggleMeasureMode = toggleMeasureMode;
 window.clearMeasurement = clearMeasurement;
@@ -1606,7 +1566,8 @@ async function saveProject() {
       chatHistory: chatHistoryForSave,
       projectName: projectName,
       currentFilePath: currentFilePath,
-      featureColors: featureColors
+      featureColors: featureColors,
+      shapes: currentShapes
     });
 
     if (result.success) {
@@ -1794,16 +1755,15 @@ async function loadProject() {
     // Update window title
     updateWindowTitle();
 
-    // Rebuild model if there's code
-    if (currentCode && currentCode.trim()) {
-      try {
-        await executeCode(currentCode);
-      } catch (err) {
-        console.error('[Renderer] Failed to rebuild model:', err);
-        addMessage('error', `Failed to rebuild model: ${err.message}`);
-      }
+    // Load shapes from project (v2.0 format has embedded shapes)
+    if (projectData.shapes && projectData.shapes.length > 0) {
+      console.log('[Renderer] Loading', projectData.shapes.length, 'shapes from project');
+      currentShapes = projectData.shapes;
+      loadShapes(projectData.shapes, 0);
     } else {
-      // No code - clear viewport
+      // No shapes - clear viewport
+      console.log('[Renderer] No shapes in project');
+      currentShapes = [];
       if (currentMesh) {
         scene.remove(currentMesh);
         currentMesh.traverse((child) => {
@@ -2411,12 +2371,11 @@ async function sendChatMessage() {
         clearViewport();
         setProcessing(null);
       } else {
-        // Success: code executed, mesh generated
-        console.log('[Chat] Success! Loading mesh:', result.meshPath);
+        // Success: code executed, shapes generated
+        console.log('[Chat] Success! Loading shapes:', result.shapes?.length || 0);
         console.log('[Chat] Volume:', result.volume, 'mm³');
-        console.log('[Chat] Colors:', result.colors || 'none');
-        // Load the mesh (this will trigger Phase 2: "Building model...")
-        loadMesh(result.meshPath, result.volume, result.colors);
+        // Load the shapes (this will trigger Phase 2: "Building model...")
+        loadShapes(result.shapes, result.volume);
       }
     } else {
       // Failure: show error

@@ -107,28 +107,53 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
   prompt += '# Role\n\n';
   prompt += 'You are a CAD assistant that generates Build123d Python code for 3D models.\n\n';
 
-  // Build123d code requirements (minimal - Claude knows the API)
+  // Code requirements - two modes
   prompt += '# Code Requirements\n\n';
-  prompt += 'CRITICAL - Your code MUST use this exact structure:\n';
-  prompt += '```\n';
-  prompt += 'with BuildPart() as part:\n';
-  prompt += '    # all geometry here\n';
-  prompt += '```\n';
-  prompt += 'The variable MUST be named `part`. Code will fail without this structure.\n\n';
-  prompt += 'Other requirements:\n';
-  prompt += '- Put all geometry inside the with block\n';
-  prompt += '- DO NOT include any export line - handled automatically\n';
-  prompt += '- Use any valid Build123d operations\n\n';
+  prompt += 'IMPORTANT: Choose the right pattern based on what you need:\n\n';
 
-  // Color support
-  prompt += '# Color Support\n\n';
-  prompt += 'You can assign colors to shapes using the Color class:\n';
-  prompt += '```\n';
-  prompt += 'part.color = Color("blue")  # Named colors: red, blue, green, yellow, etc.\n';
-  prompt += 'part.color = Color(1, 0, 0)  # RGB values (0-1): red\n';
-  prompt += '```\n';
-  prompt += 'Colors help differentiate features visually in multi-feature models.\n';
-  prompt += 'Use colors when creating complex models with multiple distinct parts.\n\n';
+  prompt += '## Multi-Colored Shapes (DEFAULT)\n\n';
+  prompt += 'DO NOT use BuildPart() - it fuses shapes into one solid and loses individual colors.\n\n';
+  prompt += 'Rules:\n';
+  prompt += '- Create shapes: Box(), Sphere(), Cylinder(), Cone(), etc.\n';
+  prompt += '- Position shapes: Pos(x, y, z) * shape (NOT shape @ Pos - that doesn\'t work)\n';
+  prompt += '- Assign colors: shape.color = Color("red") or Color(r, g, b)\n';
+  prompt += '- Group with Compound([shape1, shape2, ...]) - keeps shapes separate\n';
+  prompt += '- For oriented cones/cylinders: Pos(x,y,z) * Solid.make_cone(..., plane=...) or Solid.make_cylinder(..., plane=...)\n';
+  prompt += '- CRITICAL: Final result MUST be assigned to variable named `part`\n\n';
+
+  prompt += '## Single Fused Solid (only when needed)\n\n';
+  prompt += 'Use BuildPart() ONLY when you need boolean operations or intentional fusing:\n\n';
+  prompt += '```python\n';
+  prompt += 'with BuildPart() as part:\n';
+  prompt += '    Box(50, 50, 50)\n';
+  prompt += '    Hole(10)  # Boolean subtraction\n';
+  prompt += '    fillet(part.edges(), 2)\n';
+  prompt += '```\n\n';
+  prompt += 'This creates ONE solid with ONE color.\n\n';
+
+  prompt += '## General Rules\n\n';
+  prompt += '- DO NOT include any export lines - handled automatically\n';
+  prompt += '- All measurements in millimeters\n';
+  prompt += '- Named colors: red, blue, green, yellow, white, black, orange, purple, cyan, magenta, gray\n';
+  prompt += '- RGB colors: Color(r, g, b) with values 0-1\n\n';
+
+  prompt += '## Coordinate System\n\n';
+  prompt += 'Z = up, Y = forward (toward viewer), X = right\n\n';
+
+  prompt += '## Orienting Cones and Cylinders\n\n';
+  prompt += 'Cones/cylinders point forward (+Y) by default. For other directions use plane=:\n\n';
+  prompt += '| Direction     | Plane                              |\n';
+  prompt += '|---------------|------------------------------------|\n';
+  prompt += '| Forward (+Y)  | (default - no plane needed)        |\n';
+  prompt += '| Up (+Z)       | plane=Plane.XZ                     |\n';
+  prompt += '| Down (-Z)     | plane=Plane.XZ.rotated((180,0,0))  |\n';
+  prompt += '| Right (+X)    | plane=Plane.YZ                     |\n';
+  prompt += '| Left (-X)     | plane=Plane.YZ.rotated((0,180,0))  |\n';
+  prompt += '| Backward (-Y) | plane=Plane.XY.rotated((180,0,0))  |\n\n';
+  prompt += 'IMPORTANT:\n';
+  prompt += '- plane= is ONLY for orientation (which direction shape points)\n';
+  prompt += '- Pos() * is for position (where shape is located)\n';
+  prompt += '- DO NOT use Rot() for cone/cylinder orientation\n\n';
 
   // Limitations
   prompt += '# Limitations\n\n';
@@ -171,7 +196,8 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null) {
   prompt += '3. Ensure all measurements are in millimeters\n';
   prompt += '4. The code should be complete and executable\n';
   prompt += '5. Do NOT include any export lines (export_stl, export_gltf, etc.) - the system handles export automatically\n';
-  prompt += '6. If creating an entirely NEW model (not modifying the existing one), include exactly `NEW_MODEL: true` on its own line in your response\n\n';
+  prompt += '6. CRITICAL: Your code MUST end with assigning the final geometry to a variable named `part` (e.g., `part = Compound([...])`)\n';
+  prompt += '7. If creating an entirely NEW model (not modifying the existing one), include exactly `NEW_MODEL: true` on its own line in your response\n\n';
 
   // User's current request
   prompt += '# User Request\n\n';
