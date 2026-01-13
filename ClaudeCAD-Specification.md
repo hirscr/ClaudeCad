@@ -90,21 +90,27 @@ If this loop is smooth and fast, the demo sells. Everything else is secondary.
 
 ### 2.5 Project File Format (.cc)
 
-JSON structure:
+JSON structure (version 2):
 
 ```json
 {
-  "version": "1.0",
+  "version": "2",
   "name": "my-bracket",
   "created": "2026-01-10T...",
   "modified": "2026-01-10T...",
   "code": "from build123d import *\n...",
   "chat": [
-    {"role": "user", "content": "...", "timestamp": "..."},
-    {"role": "assistant", "content": "...", "timestamp": "..."}
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "..."}
+  ],
+  "featureColors": {"0": "#ff0000", "1": "#0000ff"},
+  "shapes": [
+    {"mesh": "base64-encoded-glTF...", "color": "#ff0000", "label": "shape_0"}
   ]
 }
 ```
+
+The `shapes` array stores embedded mesh data (base64-encoded glTF) for instant loading without Python re-execution. Version 1.0 files are not supported.
 
 ---
 
@@ -166,23 +172,23 @@ Simple two-panel layout:
 
 - Grid on XY plane
 - Grid spacing: 10mm major lines
-- Toggle via menu or button (default: on)
+- Always visible (no toggle)
 
 #### 3.2.4 Loading State
 
 - Spinner overlay on viewport while Claude/Python running
-- Status bar shows "Generating..." or "Building model..."
+- Red pulse animation on model mesh during Claude processing
+- Status bar shows "Asking Claude..." or "Building model..."
 - Input disabled during generation
 
 ### 3.3 Selection (Coordinate-Based)
 
 User clicks on model:
 1. Raycaster captures 3D coordinates + surface normal
-2. Coordinates included in next prompt to Claude
-3. Claude interprets: "User clicked at (15.2, 8.0, 10.0) on surface with normal (0, 0, 1)"
-4. Claude identifies geometry and responds: "I'll fillet that edge on the top face"
-5. **Confirmation step:** Show dialog: "Modify the top face? [Yes] [No]"
-6. User clicks Yes → model updates, or No → cancel and rephrase
+2. Yellow click marker appears at click location (auto-clears after 5 seconds)
+3. Coordinates included in next prompt to Claude
+4. Claude interprets: "User clicked at (15.2, 8.0, 10.0) on surface with normal (0, 0, 1)"
+5. Claude identifies geometry and responds accordingly
 
 This approach avoids topology ID mapping — Claude interprets intent from coordinates.
 
@@ -224,9 +230,65 @@ This approach avoids topology ID mapping — Claude interprets intent from coord
 
 ### 3.6 Status Bar
 
-- Left: Status message ("Ready", "Generating...", "Error: ...")
-- Center: Retry button (visible on errors)
-- Right: Model stats (face count, volume)
+- Left: Status message ("Ready", "Asking Claude...", "Building model...", "Error: ...")
+- Right: Model stats (vertex/face count), measurement distance when active
+
+### 3.7 Toolbar
+
+Header toolbar with grouped controls:
+
+**Left group:**
+- Open Project (Cmd+O)
+- Save Project (Cmd+S)
+- Undo (Cmd+Z)
+- Redo (Cmd+Shift+Z)
+- Clear (Cmd+Shift+K)
+
+**Right group:**
+- Color palette (9 swatches, shown when shape selected)
+- Render mode buttons (Solid | Wireframe | X-Ray)
+- Design Mode toggle (Cmd+D)
+- Axes toggle (A)
+- Edge lines toggle
+- Measure tool (M)
+- Refresh Context
+- Export STL (Cmd+E)
+- Fit to View (F)
+- View dropdown (Isometric, Front, Back, Top, Bottom, Left, Right)
+
+### 3.8 Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Cmd+S | Save project |
+| Cmd+Shift+S | Save As |
+| Cmd+O | Open project |
+| Cmd+E | Export STL |
+| Cmd+D | Toggle Design Mode |
+| Cmd+Z | Undo |
+| Cmd+Shift+Z | Redo |
+| Cmd+Shift+K | Clear/New project |
+| A | Toggle axes |
+| F | Fit to view |
+| M | Toggle measure mode |
+| Escape | Exit mode / clear selection |
+| Enter | Send message (in chat) |
+
+### 3.9 Color System
+
+**Supported color formats in code:**
+- Named colors: red, blue, green, yellow, white, black, orange, purple, cyan, magenta, gray
+- RGB: `Color(r, g, b)` with values 0-1
+
+**Multi-shape coloring:**
+- Use `Compound()` to group multiple colored shapes
+- Each shape in the compound can have its own color
+- Colors extracted from code and applied to rendered meshes
+
+**Color palette:**
+- Appears in toolbar when a shape is selected
+- 9 color swatches (black, white, blue, red, yellow, green, cyan, magenta, orange)
+- Click swatch to change selected shape's color
 
 ---
 
@@ -252,29 +314,12 @@ With selection:
 - "Fillet this edge" (after clicking near an edge)
 - "Make this face thicker" (after clicking a face)
 
-### 4.2 Undo
+### 4.2 Undo/Redo
 
-- Single level undo
-- Stores previous code snapshot in memory
-- "Undo" restores previous code and rebuilds model
-- No redo (redo = re-request the change from Claude)
-
-Implementation:
-```javascript
-let previousCode = null;
-
-function saveUndo() {
-  previousCode = currentCode;
-}
-
-function undo() {
-  if (previousCode) {
-    currentCode = previousCode;
-    previousCode = null;
-    rebuildModel();
-  }
-}
-```
+- Single level undo and redo
+- Stores previous and next code snapshots in memory
+- "Undo" (Cmd+Z) restores previous code and rebuilds model
+- "Redo" (Cmd+Shift+Z) restores the undone code
 
 ### 4.3 Save/Load
 
@@ -387,16 +432,7 @@ No auto-recovery. Keep it simple.
 
 ## 7. Demo Day Reliability
 
-### 7.1 Pre-Demo Checklist
-
-Run `npm run check` before demo (**must complete in <10 seconds**):
-- [ ] Python venv activates
-- [ ] Build123d imports successfully
-- [ ] Claude CLI responds to test prompt
-- [ ] Test model exports to STL
-- [ ] Electron app launches
-
-### 7.2 Fallback Demo Mode
+### 7.1 Fallback Demo Mode
 
 If Python/Build123d fails on demo day:
 - Load pre-built models from `demo/` folder
@@ -407,7 +443,7 @@ If Python/Build123d fails on demo day:
 
 The banner ensures viewers know it's a fallback, maintaining trust.
 
-### 7.3 Canned Models
+### 7.2 Canned Models
 
 Include in `demo/` folder:
 - `box_with_hole.py` + `.stl` — simple demo
@@ -444,7 +480,7 @@ Include in `demo/` folder:
 2. System prompt construction
 3. Response parsing and code extraction
 4. Chat UI with message display
-5. Loading states (spinner, disabled input)
+5. Loading states (spinner, disabled input, pulse animation)
 6. Timeout handling (30 second limit)
 7. Retry button on errors
 
@@ -452,16 +488,16 @@ Include in `demo/` folder:
 
 1. Raycaster for click detection
 2. Click coordinates + normal capture
-3. Coordinate injection into prompts
-4. Confirmation step ("I'll modify the top face — proceed?")
-5. Highlight on hover (whole model for now)
+3. Click marker visualization (yellow marker, 5s timeout)
+4. Coordinate injection into prompts
+5. Hover detection
 6. Measure tool (two-click distance)
 
 ### Phase 5: Persistence
 
-1. Save project (.cc file)
+1. Save project (.cc file with embedded mesh data)
 2. Load project
-3. Single-level undo
+3. Single-level undo/redo
 4. Export STL
 5. Unsaved changes warning on close
 
@@ -470,18 +506,19 @@ Include in `demo/` folder:
 1. Status bar with model stats
 2. Error messages with details
 3. File menu (New, Open, Save, Export)
-4. Pre-demo checklist script (`npm run check`)
-5. Fallback demo mode with canned models
-6. Remove test key listeners (T key test pipeline, L key spinner toggle)
-7. Toolbar controls next to View dropdown:
+4. Fallback demo mode with canned models
+5. Toolbar controls (see Section 3.7):
+   - Open/Save/Undo/Redo/Clear buttons
    - Render mode selector (Solid | Wireframe | X-Ray)
-   - Undo/Redo buttons (Undo restores previous code, Redo re-sends last request)
-   - Measure tool toggle (activates two-click distance mode from Phase 4)
-   - Grid toggle (show/hide XY grid)
-   - Fit to view button (reset camera to frame model)
-   - Axes toggle (show/hide XYZ axes)
-   - Clear button (reset to blank state)
-   - Save/Load buttons
+   - Design Mode toggle
+   - Color palette (appears on shape selection)
+   - Axes toggle, Edge lines toggle
+   - Measure tool toggle
+   - Refresh Context button
+   - Export STL button
+   - Fit to View button
+   - View dropdown
+6. Keyboard shortcuts (see Section 3.8)
 
 ### Phase 7: Design Assistant
 
@@ -613,6 +650,22 @@ with BuildPart() as part:
     shell(part.faces().sort_by(Axis.Z)[-1], thickness=2)
 ```
 
+### Multi-Colored Shapes
+
+```python
+from build123d import *
+
+# Create shapes with individual colors
+red_box = Box(20, 20, 10)
+red_box.color = Color("red")
+
+blue_sphere = Sphere(8).locate(Location((30, 0, 8)))
+blue_sphere.color = Color("blue")
+
+# Group into Compound for export
+part = Compound(children=[red_box, blue_sphere])
+```
+
 ### Export
 
 ```python
@@ -645,7 +698,7 @@ export_step(part.part, "output.step")
 | Original Risk | How Solved |
 |---------------|------------|
 | Geometry ID stability | Coordinate-based selection |
-| Undo/redo complexity | Single-level undo (just store previous code) |
+| Undo/redo complexity | Single-level undo/redo (just store previous/next code) |
 | FDM analysis accuracy | AI commentary only, no real geometry analysis |
 | View cube implementation | Dropdown presets |
 | Labels persistence | Cut entirely |
@@ -656,9 +709,9 @@ export_step(part.part, "output.step")
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | Claude produces broken code | Medium | Error shown, Retry button, user rephrases |
-| Claude misinterprets click | Low | Confirmation step, user clicks again or describes differently |
+| Claude misinterprets click | Low | User clicks again or describes differently |
 | Subprocess timeout/crash | Low | Timeouts, error messages, last-good-mesh fallback |
-| Demo day setup failure | Low | Pre-demo checklist, fallback demo mode |
+| Demo day setup failure | Low | Fallback demo mode |
 | Core loop feels slow | Medium | Warm subprocess, loading spinner, aggressive timeouts |
 
 ### The Only Real Risk

@@ -169,6 +169,7 @@ let pulseAnimationId = null;
 let originalColors = new Map(); // Map<material, {color: Color, emissive: Color}>
 let isPulsing = false;
 let pulseStartTime = null;
+let pulseMesh = null; // The mesh currently being animated (currentMesh or testCube)
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -318,6 +319,11 @@ document.getElementById('spec-save-button').addEventListener('click', async () =
   }
 });
 
+// Spec Build button handler
+document.getElementById('spec-build-button').addEventListener('click', () => {
+  handleBuildCommand();
+});
+
 // Spec editor input handler - update build button state
 document.getElementById('spec-editor').addEventListener('input', updateBuildButtonState);
 
@@ -349,6 +355,7 @@ animate();
 
 // Loading overlay functions
 const loadingOverlay = document.getElementById('loading-overlay');
+const generatingOverlay = document.getElementById('generating-overlay');
 const statusText = document.getElementById('status-text');
 const statusStats = document.getElementById('status-stats');
 
@@ -386,13 +393,17 @@ function setProcessing(phase) {
     // Disable toolbar buttons
     setToolbarDisabled(true);
 
-    // Start pulse animation if model exists
-    if (currentMesh) {
-      startPulseAnimation();
+    // Start pulse animation (handles currentMesh, testCube, or no mesh)
+    startPulseAnimation();
+
+    // If no mesh to pulse, show generating overlay instead
+    if (!currentMesh && !testCube) {
+      generatingOverlay.classList.remove('hidden');
     }
   } else if (phase === 'python') {
     // Phase 2: Building model - stop pulse, show spinner
     stopPulseAnimation(); // Stop pulse if active
+    generatingOverlay.classList.add('hidden'); // Hide generating overlay
     loadingOverlay.classList.remove('hidden');
     statusText.textContent = 'Building model...';
     statusText.style.color = '#888888';
@@ -403,6 +414,7 @@ function setProcessing(phase) {
     // Done: Stop pulse, hide loading, reset status
     stopPulseAnimation(); // Stop pulse if active
     loadingOverlay.classList.add('hidden');
+    generatingOverlay.classList.add('hidden'); // Hide generating overlay
 
     // Set status based on design mode
     if (designMode) {
@@ -432,11 +444,14 @@ function hideLoading() {
 // ============================================================
 
 /**
- * Start pulsing red animation on the current mesh
+ * Start pulsing red animation on the current mesh (or test cube if no mesh loaded)
  */
 function startPulseAnimation() {
+  // Determine which mesh to animate - prefer currentMesh, fallback to testCube
+  pulseMesh = currentMesh || testCube;
+
   // Only animate if we have a mesh
-  if (!currentMesh) {
+  if (!pulseMesh) {
     console.log('[Pulse] No mesh to animate');
     return;
   }
@@ -447,13 +462,13 @@ function startPulseAnimation() {
     return;
   }
 
-  console.log('[Pulse] Starting pulse animation');
+  console.log('[Pulse] Starting pulse animation on', currentMesh ? 'currentMesh' : 'testCube');
   isPulsing = true;
   pulseStartTime = performance.now();
 
   // Store original colors for all materials in the mesh (including edge lines)
   originalColors.clear();
-  currentMesh.traverse((child) => {
+  pulseMesh.traverse((child) => {
     if (child.isMesh && child.material) {
       // Store original color and emissive for mesh faces
       originalColors.set(child.material, {
@@ -494,8 +509,8 @@ function startPulseAnimation() {
     currentColor.lerpColors(dimRed, lightRed, t);
 
     // Apply to all mesh materials and edge lines
-    if (currentMesh) {
-      currentMesh.traverse((child) => {
+    if (pulseMesh) {
+      pulseMesh.traverse((child) => {
         if (child.isMesh && child.material) {
           child.material.color.copy(currentColor);
         } else if (child.isLineSegments && child.material) {
@@ -534,8 +549,8 @@ function stopPulseAnimation() {
   }
 
   // Restore original colors (meshes and edge lines)
-  if (currentMesh) {
-    currentMesh.traverse((child) => {
+  if (pulseMesh) {
+    pulseMesh.traverse((child) => {
       if ((child.isMesh || child.isLineSegments) && child.material && originalColors.has(child.material)) {
         const original = originalColors.get(child.material);
         child.material.color.copy(original.color);
@@ -547,9 +562,10 @@ function stopPulseAnimation() {
     });
   }
 
-  // Clear stored colors
+  // Clear stored colors and pulse mesh reference
   originalColors.clear();
   pulseStartTime = null;
+  pulseMesh = null;
 }
 
 /**
@@ -2320,7 +2336,7 @@ document.addEventListener('mousemove', (e) => {
 
   // Enforce constraints
   const minWidth = 250;
-  const maxWidth = window.innerWidth * 0.5;
+  const maxWidth = window.innerWidth * 0.95;
 
   newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
 
@@ -2559,11 +2575,90 @@ const sendButton = document.getElementById('send-button');
 let isProcessing = false;
 
 /**
- * Handle /build command (placeholder - implemented in task 5)
+ * Handle /build command - generate code from spec and build the model
  */
 async function handleBuildCommand() {
-  console.log('[DesignMode] Build command triggered (not yet implemented)');
-  addMessage('assistant', 'Build command will be implemented in the next task.');
+  console.log('[DesignMode] Build command triggered');
+
+  // Clear chat input
+  chatInput.value = '';
+
+  // Get spec from editor
+  const spec = document.getElementById('spec-editor').value.trim();
+
+  if (!spec) {
+    addMessage('error', 'No spec to build. Create a design spec first using /design [description].');
+    return;
+  }
+
+  // Check if spec is just a placeholder
+  if (spec.startsWith('Generating spec for')) {
+    addMessage('error', 'Spec is still generating. Please wait for it to complete.');
+    return;
+  }
+
+  // Set processing state
+  isProcessing = true;
+  chatInput.disabled = true;
+  sendButton.disabled = true;
+  setProcessing('claude');
+
+  try {
+    // Add user message
+    addMessage('user', '/build');
+
+    console.log('[DesignMode] Sending spec to Claude for code generation...');
+
+    // Call IPC to build from spec
+    const result = await ipcRenderer.invoke('build-from-spec', { spec });
+
+    console.log('[DesignMode] Build result:', result);
+
+    if (result.success) {
+      // Save current code for undo before updating
+      saveUndo();
+
+      // Update current code
+      currentCode = result.code;
+
+      // Mark as unsaved
+      isDirty = true;
+      updateWindowTitle();
+
+      // Clear file path for new model
+      currentFilePath = null;
+      projectName = 'untitled';
+
+      // Add success message
+      addMessage('assistant', result.explanation || 'Model built successfully from spec.');
+
+      // Load the shapes
+      console.log('[DesignMode] Loading shapes:', result.shapes?.length || 0);
+      loadShapes(result.shapes, result.volume);
+
+      // Exit design mode on success
+      exitDesignMode();
+    } else {
+      // Show error
+      console.error('[DesignMode] Build failed:', result.error);
+
+      if (result.explanation) {
+        addMessage('assistant', result.explanation);
+      }
+
+      addMessage('error', result.error || 'Failed to build from spec');
+      setProcessing(null);
+    }
+  } catch (err) {
+    console.error('[DesignMode] Build error:', err);
+    addMessage('error', `Build failed: ${err.message}`);
+    setProcessing(null);
+  } finally {
+    // Re-enable input
+    isProcessing = false;
+    chatInput.disabled = false;
+    sendButton.disabled = false;
+  }
 }
 
 /**
@@ -2588,10 +2683,26 @@ async function sendChatMessage() {
   // Check for /design command
   let actualMessage = message;
   if (message.startsWith('/design')) {
+    const designArg = message.replace('/design', '').trim();
+
+    if (!designArg) {
+      // /design with no argument - just enter design mode, don't call Claude
+      if (!designMode) {
+        enterDesignMode();
+      }
+      chatInput.value = '';
+      return;
+    }
+
+    // /design with argument - enter design mode and generate spec
     if (!designMode) {
       enterDesignMode();
     }
-    actualMessage = message.replace('/design', '').trim() || 'Help me design a 3D model';
+
+    // Clear old spec and show placeholder
+    document.getElementById('spec-editor').value = `Generating spec for "${designArg}"...`;
+
+    actualMessage = designArg;
   }
 
   // Check for /build command
@@ -2639,6 +2750,9 @@ async function sendChatMessage() {
       if (result.success) {
         // Update spec panel
         document.getElementById('spec-editor').value = result.spec;
+
+        // Update build button state (input event doesn't fire on programmatic changes)
+        updateBuildButtonState();
 
         // Add brief confirmation to chat with preview
         const preview = result.spec.substring(0, 200) + (result.spec.length > 200 ? '...' : '');
@@ -2848,7 +2962,7 @@ function lightenColor(color, amount = 0.3) {
 }
 
 /**
- * Apply per-feature highlight effect to a mesh
+ * Apply per-feature highlight effect to a single mesh
  * Stores original color and applies lightened version
  */
 function applyFeatureHighlight(mesh) {
@@ -2862,7 +2976,7 @@ function applyFeatureHighlight(mesh) {
 }
 
 /**
- * Remove per-feature highlight effect from a mesh
+ * Remove per-feature highlight effect from a single mesh
  * Restores original color from userData
  */
 function removeFeatureHighlight(mesh) {
@@ -2876,17 +2990,45 @@ function removeFeatureHighlight(mesh) {
 }
 
 /**
- * Apply highlight effect to a mesh (legacy function for compatibility)
+ * Apply highlight to ALL meshes with the same featureIndex as the given mesh
  */
 function applyHighlight(mesh) {
-  applyFeatureHighlight(mesh);
+  if (!mesh || !currentMesh) return;
+
+  const featureIndex = mesh.userData.featureIndex;
+  if (featureIndex === undefined) {
+    // No featureIndex, just highlight the single mesh
+    applyFeatureHighlight(mesh);
+    return;
+  }
+
+  // Highlight all meshes with matching featureIndex
+  currentMesh.traverse((child) => {
+    if (child.isMesh && child.userData.featureIndex === featureIndex) {
+      applyFeatureHighlight(child);
+    }
+  });
 }
 
 /**
- * Remove highlight effect from a mesh (legacy function for compatibility)
+ * Remove highlight from ALL meshes with the same featureIndex as the given mesh
  */
 function removeHighlight(mesh) {
-  removeFeatureHighlight(mesh);
+  if (!mesh || !currentMesh) return;
+
+  const featureIndex = mesh.userData.featureIndex;
+  if (featureIndex === undefined) {
+    // No featureIndex, just unhighlight the single mesh
+    removeFeatureHighlight(mesh);
+    return;
+  }
+
+  // Unhighlight all meshes with matching featureIndex
+  currentMesh.traverse((child) => {
+    if (child.isMesh && child.userData.featureIndex === featureIndex) {
+      removeFeatureHighlight(child);
+    }
+  });
 }
 
 /**
@@ -2925,15 +3067,19 @@ function updateHover() {
   if (meshIntersects.length > 0) {
     const firstHit = meshIntersects[0];
     const hitMesh = firstHit.object;
+    const hitFeatureIndex = hitMesh.userData.featureIndex;
 
-    // If this is a new hover target, update highlight
-    if (hoveredMesh !== hitMesh) {
-      // Remove highlight from previous mesh
+    // Get featureIndex of currently hovered mesh (if any)
+    const currentFeatureIndex = hoveredMesh ? hoveredMesh.userData.featureIndex : undefined;
+
+    // If this is a new feature (different featureIndex), update highlight
+    if (currentFeatureIndex !== hitFeatureIndex) {
+      // Remove highlight from previous feature
       if (hoveredMesh) {
         removeHighlight(hoveredMesh);
       }
 
-      // Apply highlight to new mesh
+      // Apply highlight to new feature (all meshes with same featureIndex)
       hoveredMesh = hitMesh;
       applyHighlight(hoveredMesh);
     }
@@ -3059,7 +3205,7 @@ function updateActiveColorSwatch() {
 }
 
 /**
- * Apply color to selected feature
+ * Apply color to selected feature (all meshes with same featureIndex)
  */
 function applyColorToFeature(colorHex) {
   if (!selectedFeature || !selectedFeature.material) {
@@ -3067,17 +3213,32 @@ function applyColorToFeature(colorHex) {
     return;
   }
 
-  const newColor = new THREE.Color(colorHex);
-  selectedFeature.material.color.copy(newColor);
-
-  // Get feature index
+  // Get feature index of clicked mesh
   const featureIndex = selectedFeature.userData.featureIndex;
+
+  if (featureIndex === undefined) {
+    console.warn('[ColorPalette] Selected feature has no featureIndex');
+    return;
+  }
+
+  const newColor = new THREE.Color(colorHex);
+
+  // Apply color to ALL meshes with the same featureIndex (entire shape)
+  let meshesColored = 0;
+  if (currentMesh) {
+    currentMesh.traverse((child) => {
+      if (child.isMesh && child.userData.featureIndex === featureIndex && child.material) {
+        child.material.color.copy(newColor);
+        meshesColored++;
+      }
+    });
+  }
 
   // Get color name for chat message
   const colorInt = parseInt(colorHex.replace('#', ''), 16);
   const colorName = colorNames[colorInt] || 'custom';
 
-  console.log(`[ColorPalette] Applied color ${colorHex} to feature ${featureIndex}`);
+  console.log(`[ColorPalette] Applied color ${colorHex} to feature ${featureIndex} (${meshesColored} meshes)`);
 
   // Add system message to chat
   addMessage('system', `Color of Feature ${featureIndex} changed to ${colorName}`);

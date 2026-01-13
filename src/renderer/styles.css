@@ -165,7 +165,7 @@ canvas {
   border-left: 1px solid #3c3c3c;
   flex-shrink: 0;
   min-width: 250px;
-  max-width: 50%;
+  max-width: 95%;
 }
 
 .spec-header {
@@ -395,6 +395,39 @@ canvas {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Generating Overlay (shown when no mesh during Claude processing) */
+#generating-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  pointer-events: none;
+}
+
+#generating-overlay.hidden {
+  display: none;
+}
+
+.generating-text {
+  font-size: 24px;
+  font-weight: 600;
+  animation: textPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes textPulse {
+  0%, 100% {
+    color: #cc2222;
+  }
+  50% {
+    color: #ff4444;
   }
 }
 

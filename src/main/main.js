@@ -482,6 +482,94 @@ ipcMain.handle('send-design-message', async (event, { message, currentSpec, hist
   }
 });
 
+// Handle build-from-spec: generate code from design spec, execute, return mesh
+ipcMain.handle('build-from-spec', async (event, { spec }) => {
+  try {
+    console.log('[Main] Build from spec request received');
+    console.log('[Main] Spec length:', spec?.length || 0);
+
+    // Validate spec
+    if (!spec || !spec.trim()) {
+      return {
+        success: false,
+        error: 'No spec to build from'
+      };
+    }
+
+    // Track retry state
+    let attemptCount = 0;
+    const maxAttempts = 2; // Original + 1 retry
+    let lastError = null;
+    let currentSpec = spec;
+
+    while (attemptCount < maxAttempts) {
+      attemptCount++;
+      console.log(`[Main] Build from spec attempt ${attemptCount}/${maxAttempts}`);
+
+      // Build prompt for code generation
+      const prompt = claudeManager.buildCodeFromSpecPrompt(currentSpec);
+
+      // Send to Claude
+      console.log('[Main] Sending spec to Claude for code generation...');
+      const response = await claudeManager.sendPrompt(prompt);
+
+      // Parse response
+      const parsed = claudeManager.parseResponse(response);
+
+      if (!parsed.code) {
+        console.log('[Main] No code in response, returning explanation only');
+        return {
+          success: false,
+          error: 'Claude did not return valid code',
+          explanation: parsed.explanation,
+          raw: parsed.raw
+        };
+      }
+
+      console.log('[Main] Code generated, executing...');
+      console.log('[Main] Code length:', parsed.code.length);
+
+      // Execute the code
+      const execResult = await pythonManager.execute(parsed.code);
+
+      if (execResult.success) {
+        console.log('[Main] Build from spec successful');
+        return {
+          success: true,
+          code: parsed.code,
+          explanation: parsed.explanation,
+          shapes: execResult.shapes,
+          volume: execResult.volume,
+          newModel: parsed.newModel
+        };
+      }
+
+      // Execution failed
+      lastError = execResult.error;
+      console.error(`[Main] Code execution failed (attempt ${attemptCount}):`, lastError);
+
+      // If we haven't exhausted retries, prepare retry with error context
+      if (attemptCount < maxAttempts) {
+        console.log('[Main] Preparing auto-retry with error context...');
+        currentSpec = `${spec}\n\n[IMPORTANT: Your previous code attempt failed with this error: "${lastError}". Please fix the issue and try again. Make sure to use valid Build123d API calls.]`;
+      }
+    }
+
+    // All attempts failed
+    console.error('[Main] All attempts failed, returning error');
+    return {
+      success: false,
+      error: `Python execution failed after ${maxAttempts} attempts: ${lastError}`
+    };
+  } catch (err) {
+    console.error('[Main] Build from spec error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
 // IPC handler for loading project
 ipcMain.handle('load-project', async () => {
   try {

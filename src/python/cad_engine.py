@@ -323,8 +323,14 @@ def handle_export_stl(code, output_path):
         # Execute the code
         part, namespace = execute_build123d(code)
 
-        # Export to binary STL (part.part is the actual geometry)
-        export_stl(part.part, output_path)
+        # Handle both BuildPart result (has .part) and direct shapes (Compound, Solid, etc.)
+        if hasattr(part, 'part'):
+            geometry = part.part
+        else:
+            geometry = part
+
+        # Export to binary STL
+        export_stl(geometry, output_path)
 
         # Success response
         print(json.dumps({

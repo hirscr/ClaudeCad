@@ -483,10 +483,82 @@ function parseDesignResponse(responseText) {
   };
 }
 
+/**
+ * Build prompt to generate Build123d code from a design spec.
+ *
+ * @param {string} spec - The design specification (markdown)
+ * @returns {string} The complete prompt
+ */
+function buildCodeFromSpecPrompt(spec) {
+  let prompt = '';
+
+  // Role
+  prompt += '# Role\n\n';
+  prompt += 'You are a CAD assistant that generates Build123d Python code from design specifications.\n\n';
+
+  // Code requirements (same as buildPrompt)
+  prompt += '# Code Requirements\n\n';
+  prompt += 'IMPORTANT: Choose the right pattern based on what you need:\n\n';
+
+  prompt += '## Multi-Colored Shapes (DEFAULT)\n\n';
+  prompt += 'DO NOT use BuildPart() - it fuses shapes into one solid and loses individual colors.\n\n';
+  prompt += 'Rules:\n';
+  prompt += '- Create shapes: Box(), Sphere(), Cylinder(), Cone(), etc.\n';
+  prompt += '- Position shapes: Pos(x, y, z) * shape (NOT shape @ Pos - that doesn\'t work)\n';
+  prompt += '- Assign colors: shape.color = Color("red") or Color(r, g, b)\n';
+  prompt += '- Group with Compound([shape1, shape2, ...]) - keeps shapes separate\n';
+  prompt += '- For oriented cones/cylinders: Pos(x,y,z) * Solid.make_cone(..., plane=...) or Solid.make_cylinder(..., plane=...)\n';
+  prompt += '- CRITICAL: Final result MUST be assigned to variable named `part`\n\n';
+
+  prompt += '## Single Fused Solid (only when needed)\n\n';
+  prompt += 'Use BuildPart() ONLY when you need boolean operations or intentional fusing:\n\n';
+  prompt += '```python\n';
+  prompt += 'with BuildPart() as part:\n';
+  prompt += '    Box(50, 50, 50)\n';
+  prompt += '    Hole(10)  # Boolean subtraction\n';
+  prompt += '    fillet(part.edges(), 2)\n';
+  prompt += '```\n\n';
+  prompt += 'This creates ONE solid with ONE color.\n\n';
+
+  prompt += '## General Rules\n\n';
+  prompt += '- DO NOT include any export lines - handled automatically\n';
+  prompt += '- All measurements in millimeters\n';
+  prompt += '- Named colors: red, blue, green, yellow, white, black, orange, purple, cyan, magenta, gray\n';
+  prompt += '- RGB colors: Color(r, g, b) with values 0-1\n\n';
+
+  prompt += '## Coordinate System\n\n';
+  prompt += 'Directions: +Z=up, -Z=down, +Y=forward, -Y=backward, +X=right, -X=left\n\n';
+
+  // Limitations
+  prompt += '# Limitations\n\n';
+  prompt += '- Only uniform scaling is supported (no stretched/squashed shapes like ellipsoids)\n';
+  prompt += '- No freeform/organic surfaces\n';
+  prompt += '- No text or fonts\n';
+  prompt += '- Keep geometry relatively simple - basic shapes, holes, fillets, shells\n\n';
+
+  // The spec to build from
+  prompt += '# Design Specification\n\n';
+  prompt += 'Build the following design exactly as specified:\n\n';
+  prompt += '```markdown\n';
+  prompt += spec;
+  prompt += '\n```\n\n';
+
+  // Instructions
+  prompt += '# Instructions\n\n';
+  prompt += '1. Generate valid Build123d Python code in a single ```python code block\n';
+  prompt += '2. Follow the spec exactly - use the dimensions, positions, and colors specified\n';
+  prompt += '3. Include a brief explanation of what you built\n';
+  prompt += '4. CRITICAL: Your code MUST end with assigning the final geometry to a variable named `part`\n';
+  prompt += '5. Include `NEW_MODEL: true` on its own line since this is a new model from spec\n';
+
+  return prompt;
+}
+
 module.exports = {
   sendPrompt,
   buildPrompt,
   buildDesignPrompt,
+  buildCodeFromSpecPrompt,
   parseResponse,
   parseDesignResponse,
   clearContext,
