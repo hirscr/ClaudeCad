@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const pythonManager = require('./python-manager');
 const claudeManager = require('./claude-manager');
 
@@ -8,6 +9,53 @@ const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 
 let mainWindow = null;
 let isQuitting = false;
+
+// Temp directory for images (Phase 8)
+const TEMP_IMAGE_DIR = path.join(os.tmpdir(), 'claudecad-images');
+let imageCounter = 0;
+
+/**
+ * Ensure temp image directory exists
+ */
+function ensureTempDir() {
+  if (!fs.existsSync(TEMP_IMAGE_DIR)) {
+    fs.mkdirSync(TEMP_IMAGE_DIR, { recursive: true });
+    console.log('[Main] Created temp image directory:', TEMP_IMAGE_DIR);
+  }
+}
+
+/**
+ * Clear all temp images
+ */
+function clearTempDir() {
+  if (fs.existsSync(TEMP_IMAGE_DIR)) {
+    const files = fs.readdirSync(TEMP_IMAGE_DIR);
+    for (const file of files) {
+      fs.unlinkSync(path.join(TEMP_IMAGE_DIR, file));
+    }
+    console.log('[Main] Cleared temp image directory');
+  }
+  imageCounter = 0;
+}
+
+/**
+ * Downscale image to max dimension (to reduce CLI latency)
+ */
+function downscaleImage(imageBuffer, maxDimension = 768) {
+  const image = nativeImage.createFromBuffer(imageBuffer);
+  const size = image.getSize();
+
+  if (size.width <= maxDimension && size.height <= maxDimension) {
+    return image.toPNG();
+  }
+
+  const scale = maxDimension / Math.max(size.width, size.height);
+  const newWidth = Math.round(size.width * scale);
+  const newHeight = Math.round(size.height * scale);
+
+  const resized = image.resize({ width: newWidth, height: newHeight });
+  return resized.toPNG();
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -773,7 +821,55 @@ ipcMain.handle('save-spec-file', async (event, { content }) => {
   }
 });
 
+// IPC handler for saving temp image (Phase 8)
+ipcMain.handle('save-temp-image', async (event, { buffer, type = 'reference' }) => {
+  try {
+    ensureTempDir();
+
+    imageCounter++;
+    const prefix = type === 'viewport' ? 'viewport' : 'img';
+    const filename = `${prefix}_${String(imageCounter).padStart(3, '0')}.png`;
+    const filepath = path.join(TEMP_IMAGE_DIR, filename);
+
+    // Downscale if needed
+    const imageBuffer = Buffer.from(buffer);
+    const processedBuffer = downscaleImage(imageBuffer);
+
+    fs.writeFileSync(filepath, processedBuffer);
+
+    console.log(`[Main] Saved image: ${filepath}`);
+
+    return {
+      success: true,
+      path: filepath,
+      number: imageCounter,
+      filename
+    };
+  } catch (err) {
+    console.error('[Main] Save image error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
+// IPC handler for getting temp image directory (Phase 8)
+ipcMain.handle('get-temp-image-dir', () => {
+  ensureTempDir();
+  return TEMP_IMAGE_DIR;
+});
+
+// IPC handler for clearing temp images (Phase 8)
+ipcMain.handle('clear-temp-images', () => {
+  clearTempDir();
+  return { success: true };
+});
+
 app.whenReady().then(async () => {
+  // Initialize temp image directory (Phase 8)
+  ensureTempDir();
+
   // Initialize Python manager
   try {
     await pythonManager.initialize();
@@ -971,6 +1067,9 @@ app.on('activate', () => {
 });
 
 app.on('quit', () => {
+  // Clear temp images (Phase 8)
+  clearTempDir();
+
   // Ensure Python manager is shut down
   pythonManager.shutdown();
 });
