@@ -117,6 +117,9 @@ let isDirty = false; // Whether current state has unsaved changes
 // Feature color overrides (featureIndex -> colorHex)
 let featureColors = {};
 
+// Images waiting to be sent with next message
+let pendingImages = [];  // Array of { number, path, thumbnail }
+
 // Undo state (single-level)
 let previousCode = null;
 let undoneCode = null; // For redo support
@@ -3399,6 +3402,100 @@ renderer.domElement.addEventListener('click', (event) => {
     }
   }
 });
+
+// ============================================================
+// PASTE HANDLING FOR REFERENCE IMAGES
+// ============================================================
+
+/**
+ * Set up paste event handler on chat input
+ */
+function setupPasteHandler() {
+  const chatInput = document.getElementById('chat-input');
+
+  chatInput.addEventListener('paste', async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();  // Don't paste as text
+
+        const blob = item.getAsFile();
+        if (!blob) continue;
+
+        const buffer = await blob.arrayBuffer();
+
+        try {
+          const result = await ipcRenderer.invoke('save-temp-image', {
+            buffer: Array.from(new Uint8Array(buffer)),
+            type: 'reference'
+          });
+
+          if (result.success) {
+            // Create thumbnail for preview
+            const thumbnailUrl = URL.createObjectURL(blob);
+
+            pendingImages.push({
+              number: result.number,
+              path: result.path,
+              thumbnail: thumbnailUrl
+            });
+
+            updatePendingImagesUI();
+
+            console.log(`[Renderer] Image ${result.number} ready: ${result.path}`);
+          } else {
+            console.error('[Renderer] Failed to save pasted image:', result.error);
+          }
+        } catch (err) {
+          console.error('[Renderer] Paste handler error:', err);
+        }
+
+        break;  // Only handle first image
+      }
+    }
+  });
+}
+
+/**
+ * Clear all pending images and revoke object URLs
+ */
+function clearPendingImages() {
+  // Revoke object URLs to free memory
+  for (const img of pendingImages) {
+    if (img.thumbnail) {
+      URL.revokeObjectURL(img.thumbnail);
+    }
+  }
+  pendingImages = [];
+  updatePendingImagesUI();
+}
+
+/**
+ * Remove a single pending image by number
+ */
+function removePendingImage(number) {
+  const index = pendingImages.findIndex(img => img.number === number);
+  if (index !== -1) {
+    if (pendingImages[index].thumbnail) {
+      URL.revokeObjectURL(pendingImages[index].thumbnail);
+    }
+    pendingImages.splice(index, 1);
+    updatePendingImagesUI();
+  }
+}
+
+/**
+ * Update pending images UI (placeholder for next task)
+ */
+function updatePendingImagesUI() {
+  console.log('[Renderer] Pending images:', pendingImages.length);
+  // UI implementation in next task
+}
+
+// Initialize paste handler
+setupPasteHandler();
 
 // ============================================================
 
