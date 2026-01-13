@@ -453,6 +453,35 @@ ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, c
   }
 });
 
+// Handle design mode message
+ipcMain.handle('send-design-message', async (event, { message, currentSpec, history }) => {
+  try {
+    console.log('[Main] Design mode message received');
+
+    // Build design prompt
+    const prompt = claudeManager.buildDesignPrompt(message, currentSpec, history);
+
+    // Send to Claude
+    const response = await claudeManager.sendPrompt(prompt);
+
+    // Parse response (just return the spec text)
+    const parsed = claudeManager.parseDesignResponse
+      ? claudeManager.parseDesignResponse(response)
+      : { spec: response.trim(), raw: response };
+
+    return {
+      success: true,
+      spec: parsed.spec
+    };
+  } catch (err) {
+    console.error('[Main] Design message error:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+});
+
 // IPC handler for loading project
 ipcMain.handle('load-project', async () => {
   try {

@@ -2396,6 +2396,14 @@ const sendButton = document.getElementById('send-button');
 let isProcessing = false;
 
 /**
+ * Handle /build command (placeholder - implemented in task 5)
+ */
+async function handleBuildCommand() {
+  console.log('[DesignMode] Build command triggered (not yet implemented)');
+  addMessage('assistant', 'Build command will be implemented in the next task.');
+}
+
+/**
  * Send a chat message through the full pipeline:
  * User -> Claude -> Python -> Mesh
  */
@@ -2415,22 +2423,18 @@ async function sendChatMessage() {
   }
 
   // Check for /design command
+  let actualMessage = message;
   if (message.startsWith('/design')) {
     if (!designMode) {
       enterDesignMode();
     }
-    // Extract the design target (if provided)
-    const designTarget = message.replace('/design', '').trim();
-    if (designTarget) {
-      console.log('[DesignMode] Design target specified:', designTarget);
-      // Will be used in next task for Claude prompt
-    }
+    actualMessage = message.replace('/design', '').trim() || 'Help me design a 3D model';
   }
 
   // Check for /build command
-  if (message === '/build') {
-    console.log('[DesignMode] Build command detected');
-    // Will trigger build in task 5
+  if (message === '/build' || message.toLowerCase() === 'build it') {
+    await handleBuildCommand();
+    return;
   }
 
   // Clear input immediately
@@ -2445,115 +2449,151 @@ async function sendChatMessage() {
     // Add user message to chat
     addMessage('user', message);
 
-    // Show loading state - Phase 1: Asking Claude
-    setProcessing('claude');
-
     // Build history for Claude (exclude timestamps, only role + content)
     const history = messageHistory
       .filter(msg => msg.role === 'user' || msg.role === 'assistant')
       .map(msg => ({ role: msg.role, content: msg.content }));
 
-    // Check if we have recent click info (within last 30 seconds)
-    let clickInfo = null;
-    if (lastClickInfo && lastClickInfo.timestamp) {
-      const timeSinceClick = Date.now() - lastClickInfo.timestamp;
-      if (timeSinceClick <= 30000) { // 30 seconds
-        clickInfo = {
-          position: lastClickInfo.position,
-          normal: lastClickInfo.normal
-        };
-        console.log('[Chat] Including recent click info from', (timeSinceClick / 1000).toFixed(1), 'seconds ago');
-      }
-    }
+    if (designMode) {
+      // Design mode: get spec from Claude
+      setProcessing('claude');
 
-    // Clear click marker when sending
-    clearClickMarker();
+      const currentSpec = document.getElementById('spec-editor').value;
 
-    // If project was just loaded, prepend context note to help Claude understand current state
-    let messageToSend = message;
-    if (projectJustLoaded && currentCode) {
-      messageToSend = `[Note: A project was just loaded. The current model code shown above is the ground truth - ignore any conflicting context from chat history.]\n\n${message}`;
-      projectJustLoaded = false; // Clear flag after first message
-      console.log('[Chat] Injected context reset note for post-load message');
-    }
+      console.log('[Chat] Design mode - sending to Claude via IPC...');
+      console.log('[Chat] Message:', actualMessage);
+      console.log('[Chat] Current spec length:', currentSpec.length);
+      console.log('[Chat] History entries:', history.length);
 
-    console.log('[Chat] Sending to Claude via IPC...');
-    console.log('[Chat] Message:', messageToSend);
-    console.log('[Chat] Current code length:', currentCode.length);
-    console.log('[Chat] History entries:', history.length);
-    console.log('[Chat] Click info:', clickInfo ? 'included' : 'none');
+      const result = await ipcRenderer.invoke('send-design-message', {
+        message: actualMessage,
+        currentSpec,
+        history
+      });
 
-    // Call IPC
-    const result = await ipcRenderer.invoke('send-chat-message', {
-      message: messageToSend,
-      currentCode,
-      history,
-      clickInfo
-    });
-
-    // Clear click info after using it
-    if (clickInfo) {
-      lastClickInfo = null;
-      console.log('[Chat] Cleared click info after sending');
-    }
-
-    console.log('[Chat] Received result:', result);
-
-    if (result.success) {
-      // Save current code for undo before updating
-      saveUndo();
-
-      // If this is a new model, clear the file path so next save prompts for filename
-      if (result.newModel) {
-        console.log('[Chat] New model detected - clearing file path for Save As');
-        currentFilePath = null;
-        projectName = 'untitled';
-      }
-
-      // Update current code
-      currentCode = result.code;
-
-      // Mark as unsaved (code changed)
-      isDirty = true;
-      updateWindowTitle();
-
-      // Add assistant message
-      addMessage('assistant', result.explanation);
-
-      // Check if result is empty (no geometry produced)
-      if (result.empty) {
-        console.log('[Chat] Empty geometry result - clearing viewport');
-        clearViewport();
-        setProcessing(null);
-      } else {
-        // Success: code executed, shapes generated
-        console.log('[Chat] Success! Loading shapes:', result.shapes?.length || 0);
-        console.log('[Chat] Volume:', result.volume, 'mm³');
-        // Load the shapes (this will trigger Phase 2: "Building model...")
-        loadShapes(result.shapes, result.volume);
-      }
-    } else {
-      // Failure: show error
-      console.error('[Chat] Failed:', result.error);
-
-      // Add assistant explanation (if any)
-      if (result.explanation) {
-        addMessage('assistant', result.explanation);
-      }
-
-      // Add error message
-      addMessage('error', result.error || 'Unknown error occurred');
-
-      // Hide loading and show error in status
-      statusText.textContent = result.error || 'Error occurred';
-      statusText.style.color = '#f44747';
       setProcessing(null);
 
-      // Reset status after 5 seconds
-      setTimeout(() => {
-        statusText.textContent = 'Ready';
-        statusText.style.color = '#888888';
-      }, 5000);
+      if (result.success) {
+        // Update spec panel
+        document.getElementById('spec-editor').value = result.spec;
+
+        // Add brief confirmation to chat with preview
+        const preview = result.spec.substring(0, 200) + (result.spec.length > 200 ? '...' : '');
+        addMessage('assistant', `Spec updated:\n\n${preview}\n\n(See full spec in panel)`);
+
+        // Mark dirty
+        isDirty = true;
+        updateWindowTitle();
+      } else {
+        addMessage('error', result.error);
+      }
+    } else {
+      // Normal mode: existing code generation flow
+      // Show loading state - Phase 1: Asking Claude
+      setProcessing('claude');
+
+      // Check if we have recent click info (within last 30 seconds)
+      let clickInfo = null;
+      if (lastClickInfo && lastClickInfo.timestamp) {
+        const timeSinceClick = Date.now() - lastClickInfo.timestamp;
+        if (timeSinceClick <= 30000) { // 30 seconds
+          clickInfo = {
+            position: lastClickInfo.position,
+            normal: lastClickInfo.normal
+          };
+          console.log('[Chat] Including recent click info from', (timeSinceClick / 1000).toFixed(1), 'seconds ago');
+        }
+      }
+
+      // Clear click marker when sending
+      clearClickMarker();
+
+      // If project was just loaded, prepend context note to help Claude understand current state
+      let messageToSend = message;
+      if (projectJustLoaded && currentCode) {
+        messageToSend = `[Note: A project was just loaded. The current model code shown above is the ground truth - ignore any conflicting context from chat history.]\n\n${message}`;
+        projectJustLoaded = false; // Clear flag after first message
+        console.log('[Chat] Injected context reset note for post-load message');
+      }
+
+      console.log('[Chat] Sending to Claude via IPC...');
+      console.log('[Chat] Message:', messageToSend);
+      console.log('[Chat] Current code length:', currentCode.length);
+      console.log('[Chat] History entries:', history.length);
+      console.log('[Chat] Click info:', clickInfo ? 'included' : 'none');
+
+      // Call IPC
+      const result = await ipcRenderer.invoke('send-chat-message', {
+        message: messageToSend,
+        currentCode,
+        history,
+        clickInfo
+      });
+
+      // Clear click info after using it
+      if (clickInfo) {
+        lastClickInfo = null;
+        console.log('[Chat] Cleared click info after sending');
+      }
+
+      console.log('[Chat] Received result:', result);
+
+      if (result.success) {
+        // Save current code for undo before updating
+        saveUndo();
+
+        // If this is a new model, clear the file path so next save prompts for filename
+        if (result.newModel) {
+          console.log('[Chat] New model detected - clearing file path for Save As');
+          currentFilePath = null;
+          projectName = 'untitled';
+        }
+
+        // Update current code
+        currentCode = result.code;
+
+        // Mark as unsaved (code changed)
+        isDirty = true;
+        updateWindowTitle();
+
+        // Add assistant message
+        addMessage('assistant', result.explanation);
+
+        // Check if result is empty (no geometry produced)
+        if (result.empty) {
+          console.log('[Chat] Empty geometry result - clearing viewport');
+          clearViewport();
+          setProcessing(null);
+        } else {
+          // Success: code executed, shapes generated
+          console.log('[Chat] Success! Loading shapes:', result.shapes?.length || 0);
+          console.log('[Chat] Volume:', result.volume, 'mm³');
+          // Load the shapes (this will trigger Phase 2: "Building model...")
+          loadShapes(result.shapes, result.volume);
+        }
+      } else {
+        // Failure: show error
+        console.error('[Chat] Failed:', result.error);
+
+        // Add assistant explanation (if any)
+        if (result.explanation) {
+          addMessage('assistant', result.explanation);
+        }
+
+        // Add error message
+        addMessage('error', result.error || 'Unknown error occurred');
+
+        // Hide loading and show error in status
+        statusText.textContent = result.error || 'Error occurred';
+        statusText.style.color = '#f44747';
+        setProcessing(null);
+
+        // Reset status after 5 seconds
+        setTimeout(() => {
+          statusText.textContent = 'Ready';
+          statusText.style.color = '#888888';
+        }, 5000);
+      }
     }
   } catch (err) {
     console.error('[Chat] Error in executeChatMessage:', err);
