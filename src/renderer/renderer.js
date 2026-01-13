@@ -3487,11 +3487,44 @@ function removePendingImage(number) {
 }
 
 /**
- * Update pending images UI (placeholder for next task)
+ * Update pending images UI
  */
 function updatePendingImagesUI() {
-  console.log('[Renderer] Pending images:', pendingImages.length);
-  // UI implementation in next task
+  const container = document.getElementById('pending-images-container');
+  container.innerHTML = '';
+
+  if (pendingImages.length === 0) {
+    container.classList.remove('has-images');
+    return;
+  }
+
+  container.classList.add('has-images');
+
+  for (const img of pendingImages) {
+    const item = document.createElement('div');
+    item.className = 'pending-image-item';
+
+    const thumbnail = document.createElement('img');
+    thumbnail.src = img.thumbnail;
+    thumbnail.alt = `Image ${img.number}`;
+
+    const number = document.createElement('span');
+    number.className = 'pending-image-number';
+    number.textContent = img.number;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'pending-image-remove';
+    removeBtn.textContent = '\u00D7';  // × symbol
+    removeBtn.title = 'Remove image';
+    removeBtn.addEventListener('click', () => {
+      removePendingImage(img.number);
+    });
+
+    item.appendChild(thumbnail);
+    item.appendChild(number);
+    item.appendChild(removeBtn);
+    container.appendChild(item);
+  }
 }
 
 // Initialize paste handler
