@@ -1,88 +1,82 @@
 # BB-8 Droid (10cm tall)
 
-Create BB-8 as a 3D solid.
+Create BB-8 as a multi-colored 3D model using Compound (not BuildPart).
 
-## Coordinate system
-- X = left/right
-- Z = up/down
-- +Y = front (main eye points toward +Y)
+## Coordinate System
+- Z = up/down, Y = forward/back, X = left/right
+- Main eye looks toward +Y
 - Units: millimeters
-- Symmetric about YZ plane (X = 0) except for secondary eye
-- Use only: sphere, cylinder, box, union, subtract
 
 ---
 
-## 1) Body (main sphere)
+## 1) Body (orange sphere)
 - Sphere: diameter 70mm
-- Center at (0, 0, 35) — sitting on ground plane
+- Center at (0, 0, 35) — sitting on ground
+- Color: orange
 
 ---
 
-## 2) Head (dome)
-- Hemisphere: radius 20mm
-- Center at (0, 0, 79)
-- **Important:** Flat side faces DOWN, rounded side faces UP
-- Creates a 3-4mm visible gap between bottom of head dome and top of body sphere
-- Optional: small fillet on bottom edge of dome
+## 2) Head (white dome)
+- Hemisphere: radius 20mm, flat side down, dome up
+- Center at (0, 0, 79) — floating above body
+- Color: white
 
 ---
 
-## 3) Main eye lens
-- Cylinder: diameter 14mm, depth 4mm, axis along Y
+## 3) Main eye
+- Cylinder: diameter 14mm, height 4mm, pointing forward
 - Center at (0, 18, 84)
-- Subtract inner recess: cylinder diameter 10mm, depth 2mm
+- Color: dark gray
 
 ---
 
-## 4) Secondary eye (smaller, offset to right)
-- Cylinder: diameter 8mm, depth 3mm, axis along Y
+## 4) Secondary eye
+- Cylinder: diameter 8mm, height 3mm, pointing forward
 - Center at (8, 17, 78)
+- Color: dark gray
 
 ---
 
-## 5) Antennas (two thin cylinders)
-- Two cylinders: diameter 1mm, height 15mm, axis along Z
-- **Must be attached to top of head dome**
-- Left antenna center: (-5, -3, 97)
-- Right antenna center: (5, -3, 97)
+## 5) Antennas
+- Two cylinders: diameter 1.5mm, height 15mm, pointing up
+- Left at (-5, -3, 99)
+- Right at (5, -3, 99)
+- Color: gray
 
 ---
 
-## 6) Body center panel (large circular ring)
-- Outer cylinder: diameter 25mm, depth 2mm, axis along Y
-- Center at (0, 34, 35)
-- Subtract inner circle: diameter 18mm, depth 2mm — creates ring effect
+## 6) Body center panel (ring on front)
+- Ring: outer diameter 25mm, inner diameter 18mm, thickness 2mm
+- Pointing forward, center at (0, 35, 35)
+- Color: gray
 
 ---
 
 ## 7) Body side panels
-- Two cylinders: diameter 15mm, depth 2mm, axis along X
-- Left panel center: (-34, 0, 40)
-- Right panel center: (34, 0, 40)
+- Two cylinders: diameter 15mm, height 2mm, pointing outward
+- Right at (35, 0, 40)
+- Left at (-35, 0, 40)
+- Color: gray
 
 ---
 
-## 8) Accent details (small circular bumps)
-- Four cylinders: diameter 8mm, depth 1.5mm
-- Upper pair at Z=50mm:
-  - (12, 30, 50)
-  - (-12, 30, 50)
-- Lower pair at Z=22mm:
-  - (15, 28, 22)
-  - (-15, 28, 22)
+## 8) Accent bumps
+- Four cylinders: diameter 8mm, height 1.5mm, pointing forward
+- Upper: (-12, 33, 50) and (12, 33, 50)
+- Lower: (-15, 32, 22) and (15, 32, 22)
+- Color: light gray
 
 ---
 
-## 9) Body bottom panel
-- Cylinder: diameter 20mm, depth 2mm, axis along Z (pointing down)
-- Center at (0, 0, 2)
+## 9) Bottom panel
+- Cylinder: diameter 20mm, height 2mm, pointing down
+- Center at (0, 0, 1)
+- Color: gray
 
 ---
 
-## Summary
-A stylized BB-8 droid with:
-- Round 70mm body sphere
-- Dome head floating 3-4mm above body
-- Asymmetric eyes (one large, one small)
-- Two thin antennas on top
-- Circular panel details on body
+## Colors Summary
+- Body: orange
+- Head: white
+- Eyes: dark gray
+- Antennas, panels: gray

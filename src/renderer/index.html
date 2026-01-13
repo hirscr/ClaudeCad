@@ -84,9 +84,21 @@
         </select>
       </div>
     </div>
-    <div id="viewport">
-      <div id="loading-overlay" class="hidden">
-        <div class="loading-spinner"></div>
+    <div id="main-content">
+      <div id="viewport">
+        <div id="loading-overlay" class="hidden">
+          <div class="loading-spinner"></div>
+        </div>
+      </div>
+      <div id="spec-resize-handle"></div>
+      <div id="spec-panel">
+        <div class="spec-header">Design Spec</div>
+        <textarea id="spec-editor" placeholder="Spec will appear here..."></textarea>
+        <div class="spec-buttons">
+          <button id="spec-load-button">Load</button>
+          <button id="spec-save-button">Save</button>
+          <button id="spec-build-button">Build</button>
+        </div>
       </div>
     </div>
     <div id="chat-panel">

@@ -2039,6 +2039,62 @@ document.addEventListener('mouseup', () => {
   }
 });
 
+// Spec panel resize functionality
+const specPanel = document.getElementById('spec-panel');
+const specResizeHandle = document.getElementById('spec-resize-handle');
+
+let isResizingSpec = false;
+let startX = 0;
+let startWidth = 0;
+
+// Function to update resize handle visibility based on spec panel visibility
+function updateSpecResizeHandleVisibility() {
+  const isVisible = specPanel.style.display === 'flex';
+  specResizeHandle.style.display = isVisible ? 'block' : 'none';
+}
+
+// Initial visibility check
+updateSpecResizeHandleVisibility();
+
+// Watch for style changes to spec panel
+const specPanelObserver = new MutationObserver(updateSpecResizeHandleVisibility);
+specPanelObserver.observe(specPanel, { attributes: true, attributeFilter: ['style'] });
+
+specResizeHandle.addEventListener('mousedown', (e) => {
+  isResizingSpec = true;
+  startX = e.clientX;
+  startWidth = specPanel.offsetWidth;
+
+  // Prevent text selection during drag
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizingSpec) return;
+
+  // Calculate new width (dragging left increases width, dragging right decreases)
+  const deltaX = startX - e.clientX;
+  let newWidth = startWidth + deltaX;
+
+  // Enforce constraints
+  const minWidth = 250;
+  const maxWidth = window.innerWidth * 0.5;
+
+  newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+
+  // Apply new width
+  specPanel.style.width = `${newWidth}px`;
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizingSpec) {
+    isResizingSpec = false;
+    // Re-enable text selection
+    document.body.style.userSelect = '';
+  }
+});
+
 // ============================================================
 // CHAT MESSAGE SYSTEM
 // ============================================================

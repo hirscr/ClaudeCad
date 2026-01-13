@@ -115,15 +115,118 @@ body {
   margin: 0 4px;
 }
 
+/* Main Content Container - holds viewport and spec panel */
+#main-content {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
 #viewport {
   flex: 1;
   position: relative;
   overflow: hidden;
   min-height: 200px;
+  min-width: 300px;
 }
 
 canvas {
   display: block;
+}
+
+/* Spec Panel */
+#spec-panel {
+  display: none;
+  flex-direction: column;
+  width: 350px;
+  background: #252526;
+  border-left: 1px solid #3c3c3c;
+  flex-shrink: 0;
+  min-width: 250px;
+  max-width: 50%;
+}
+
+.spec-header {
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #2d2d30;
+  border-bottom: 1px solid #3c3c3c;
+  user-select: none;
+}
+
+#spec-editor {
+  flex: 1;
+  background: #1e1e1e;
+  color: #ffffff;
+  border: none;
+  padding: 12px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+  overflow-y: auto;
+}
+
+#spec-editor::placeholder {
+  color: #888888;
+  font-style: italic;
+}
+
+.spec-buttons {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: #2d2d30;
+  border-top: 1px solid #3c3c3c;
+}
+
+.spec-buttons button {
+  flex: 1;
+  background: #4a9eff;
+  color: #ffffff;
+  border: none;
+  border-radius: 3px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s ease;
+}
+
+.spec-buttons button:hover:not(:disabled) {
+  background: #5db0ff;
+}
+
+.spec-buttons button:active:not(:disabled) {
+  background: #3a8edf;
+}
+
+.spec-buttons button:disabled {
+  background: #3c3c3c;
+  color: #888888;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Spec Panel Resize Handle */
+#spec-resize-handle {
+  display: none;
+  position: relative;
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+#spec-resize-handle:hover {
+  background: #4a9eff;
 }
 
 /* Chat Panel */

@@ -4,6 +4,91 @@ Features deferred from demo scope. Implement after core demo is working and Anth
 
 ---
 
+## Phase 8: Autonomous Iteration Mode
+
+User provides reference images + description, Claude iterates autonomously until satisfied.
+
+### Flow
+1. User: "Build R2D2" + pastes 2-3 reference images
+2. Claude generates Build123d code
+3. Python executes → mesh renders in viewport
+4. Viewport screenshot captured
+5. Claude sees: reference images + current render + code
+6. Claude compares, decides what to fix
+7. Loop back to step 2 until:
+   - User clicks "Stop"
+   - Iteration limit reached (user-configurable, e.g., "try 17 times")
+   - Claude makes no code changes (converged)
+   - Context hits 80% (track tokens internally)
+
+### Technical Requirements
+- **Image input to Claude CLI**: Ctrl+V paste works in interactive mode; need programmatic image passing or upload button in UI
+- **Viewport screenshot**: Three.js canvas → image buffer → send to Claude
+- **Loop driver**: Renderer triggers IPC calls in loop, respects stop conditions
+- **Context tracking**: Estimate token usage, warn/stop at 80%
+- **Model selector**: User chooses Sonnet or Opus (cost/quality tradeoff)
+
+### UI
+- "Autonomous Mode" or "Auto-Iterate" button/command
+- Iteration counter display ("Iteration 5 of 17")
+- Stop button (prominent, always visible during loop)
+- Model dropdown (Sonnet/Opus)
+
+---
+
+## Post-Phase 7: Priority Fixes (Demo-Critical)
+
+### Keep Python Truly Warm
+- src/main/python-manager.js:173-180 closes stdin and forces respawn every call
+- This negates the demo's latency promise
+- Fix: Use request delimiter without ending stdin; only recycle on timeout/crash
+
+### Correct Project File Validation
+- src/main/main.js:500 uses `!projectData.code === undefined` which is logically wrong
+- Fix: Replace with clear check like `projectData.code === undefined`
+
+### Remove Duplicate Accelerator
+- src/main/main.js:562-640 assigns CmdOrCtrl+Shift+K to both "New" and "Clear Project"
+- Fix: Keep one, reassign the other to avoid UI confusion
+
+---
+
+## Known Issues (Observed, Not Blocking)
+
+### UI Wonkiness
+- Edge highlight toggle button behavior is inconsistent
+- Measure tool has quirky behavior (needs investigation)
+- Selection dot (yellow marker) disappears before 5 second timeout
+
+### Geometry Operations Failing
+- Fillets often fail (Build123d/OCP limitation or code issue?)
+- Chamfers fail due to timeout (30s Claude CLI timeout not enough for complex operations)
+
+---
+
+## Post-Phase 7: Nice-to-Have (Demo-Credibility)
+
+### Mesh-to-Shape Grouping
+- Build123d exports each shape as multiple meshes (box = 6 face meshes, etc.)
+- Current color system only colors individual meshes, not whole shapes
+- Problems:
+  - Clicking selects one mesh, not the whole shape
+  - Can't easily color a whole sphere/box
+  - Spatial clustering fails for overlapping shapes
+- Fix: Implement mesh-to-shape mapping so clicking selects/colors entire shapes
+- Research: glTF node hierarchy, mesh naming patterns, or vertex connectivity
+
+### Fix Stats for Indexed Geometry
+- src/renderer/renderer.js:470-486 assumes non-indexed geometry
+- glTF likely has indices, so face count can be wrong
+- Fix: Use `geometry.index.count / 3` when indexed
+
+### Add Recovery Path UX Note
+- When Python/Claude fails, display brief message: "Last model kept; try rephrase or Retry"
+- Makes errors feel controlled (no user panic)
+
+---
+
 ## Post-Demo: Near Term
 
 ### View Cube
@@ -35,6 +120,13 @@ Features deferred from demo scope. Implement after core demo is working and Anth
 - Edge selected: length, type
 - Vertex selected: coordinates
 - Nothing selected: bounding box, volume, surface area
+
+### Light Mode Toggle
+- Toggle between two lighting modes:
+  - **Camera-locked**: Light moves with camera (always illuminates front of model)
+  - **Scene-fixed**: Light stays in fixed position as camera orbits
+- Button in toolbar to switch modes
+- Default: Camera-locked (better for inspection)
 
 ### Window State Persistence
 - Remember window size and position

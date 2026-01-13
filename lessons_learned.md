@@ -240,3 +240,195 @@
 42. **Measurement Display Position**
     - Measurement text should appear near Measure button, not floating
     - Yellow color (#dcdcaa) for visibility
+
+## Phase 6: Color & Multi-Shape Architecture
+
+### glTF Color Export
+
+43. **Build123d Colors Don't Transfer to glTF**
+    - Setting `shape.color = Color("red")` in Build123d code doesn't appear in exported glTF
+    - Build123d's `export_gltf` uses OpenCASCADE's `RWGltf_CafWriter` which requires explicit PBR material setup
+    - The XDE/XCAF document infrastructure exists but isn't properly populated
+    - Result: glTF files contain geometry only, colors are lost
+
+44. **Colors Come From Pipeline, Not File**
+    - Professional CAD web viewers (three-cad-viewer, CAD Exchanger) don't rely on glTF to carry colors
+    - They pass color metadata separately as JSON alongside geometry
+    - Pattern: Export geometry in mesh format, pass colors explicitly, apply in viewer
+    - This is industry standard, not a workaround
+
+45. **Per-Shape Export Solution**
+    - Export each colored shape as its own glTF file
+    - Return array of {mesh_path, color, label} to JavaScript
+    - Load each mesh, apply color, add to scene
+    - No complex mesh-to-face mapping needed
+    - Each shape = one color = deterministic
+
+### OpenCASCADE Color Behavior
+
+46. **TopoDS_Shape Contains Geometry Only**
+    - OpenCASCADE shapes don't store color attributes
+    - Colors must be stored separately (AIS_ColoredShape, XCAF documents, or application data)
+    - "It is a responsibility of application-level modification operation to preserve necessary attributes"
+    - Source: OpenCASCADE forum discussion on boolean operation colors
+
+47. **Boolean Union Merges Into One Solid**
+    - `combined = box + sphere` creates ONE topological solid
+    - No "box part" or "sphere part" remains - just faces on a unified solid
+    - Color history is lost - the solid can only have one color
+    - This is fundamental CAD behavior, not a bug
+
+48. **Face Tracking Through Booleans Is Possible But Complex**
+    - OpenCASCADE's `BRepTools_History` can trace which output faces came from which input solid
+    - `Modified(shape)` and `Generated(shape)` APIs exist
+    - But Build123d doesn't expose this history API
+    - Would require dropping to OCP (OpenCASCADE Python) layer
+    - Deferred to future phase as "Mesh-to-Shape Grouping" research
+
+### Shape Architecture
+
+49. **Overlapping ≠ Merged**
+    - Two shapes occupying same space but not boolean-unioned remain SEPARATE
+    - Each keeps its own color, exports as its own mesh
+    - Only explicit `+` operator or `fuse()` merges shapes
+    - Compound([shape1, shape2]) keeps them separate
+
+50. **Cross-Shape Fillet Strategy**
+    - Filleting across shape boundaries requires union first
+    - Union + fillet = one solid = one color
+    - Acceptable trade-off: user can change color after if needed
+    - Claude generates appropriate pattern based on operation type
+
+### Project File Format
+
+51. **Version Field Required for Breaking Changes**
+    - New .cc format stores shapes array instead of single mesh
+    - Must include `version` field to detect format
+    - Old files without version field should be rejected with clear message
+    - Don't attempt migration - clean rejection preferred for demo stability
+
+52. **Shape-Based .cc Structure**
+    - New format: `{ version, code, history, shapes: [{mesh, color, label}, ...] }`
+    - Each shape's mesh stored as base64-encoded glb
+    - Colors persist through save/load cycle
+    - Labels enable future "make the head bigger" style commands
+
+## Phase 7: Coordinate System & Orientation
+
+### glTF Export Transformation
+
+53. **glTF Export Adds -90° X Rotation**
+    - Build123d's `export_gltf` automatically converts from Z-up to Y-up (glTF standard)
+    - The rotation is embedded in the glTF node: `"rotation":[-0.7071,0,0,0.7071]`
+    - Build123d +Z → Rendered +Y (forward)
+    - Build123d +Y → Rendered -Z (down)
+    - Testing Build123d coordinates directly gives WRONG answers for rendered output
+
+54. **Don't Counter-Rotate in Renderer**
+    - Original fix was `shapeGroup.rotation.x = -Math.PI / 2` to undo glTF rotation
+    - This caused double-rotation issues
+    - Correct fix: Remove renderer rotation, let glTF transformation stand
+    - Snowman stands correctly; just need to understand the coordinate mapping
+
+### Cone/Cylinder Orientation
+
+55. **Default Cone Points Forward (+Y), Not Up**
+    - Due to glTF export transformation
+    - Build123d default (+Z) becomes rendered +Y (forward)
+    - For a forward-pointing nose: use default, no plane parameter needed
+
+56. **Orientation Table for Rendered Output**
+    - Forward (+Y): default (no plane)
+    - Up (+Z): `plane=Plane.XZ`
+    - Down (-Z): `plane=Plane.XZ.rotated((180,0,0))`
+    - Right (+X): `plane=Plane.YZ`
+    - Left (-X): `plane=Plane.YZ.rotated((0,180,0))`
+    - Backward (-Y): `plane=Plane.XY.rotated((180,0,0))`
+
+57. **Use plane= Not Rot() for Orientation**
+    - LLMs are terrible at rotation math
+    - Claude consistently gets Rot() angles wrong
+    - `Solid.make_cone(..., plane=Plane.XZ)` is deterministic
+    - Rot() should only be used for unusual angles not in the table
+
+### Build123d Syntax
+
+58. **Position Syntax: Pos() * shape, Not shape @ Pos()**
+    - `shape @ Pos(x, y, z)` throws error: "unsupported operand type(s) for @"
+    - Correct: `Pos(0, 0, 25) * Sphere(25)`
+    - plane= is for orientation, Pos() * is for position - don't mix them
+
+59. **Solid.make_cone/make_cylinder for Oriented Shapes**
+    - High-level `Cone()` and `Cylinder()` don't accept plane parameter
+    - Must use `Solid.make_cone(r1, r2, h, plane=...)` for orientation
+    - Returns Solid which works with Compound and .color assignment
+
+### The Coordinate System Fix (MAJOR BREAKTHROUGH)
+
+60. **One Coordinate System End-to-End**
+    - Build123d writes Z-up code
+    - glTF should store Z-up data
+    - Three.js should render Z-up (camera.up = (0,0,1))
+    - No rotations anywhere in the pipeline
+    - When AI writes `Cylinder(20, 5)` expecting vertical, it renders vertical
+
+61. **export_gltf's Hidden -90° X Rotation**
+    - Build123d's `export_gltf()` applies a hardcoded -90° X rotation
+    - Purpose: Convert Z-up (CAD convention) to Y-up (glTF standard)
+    - This is NOT optional - no parameter to disable it
+    - The rotation is embedded as quaternion: `"rotation":[-0.7071,0,0,0.7071]`
+
+62. **Pre-Rotation Solution in cad_engine.py**
+    - Apply +90° X rotation BEFORE calling export_gltf
+    - The two rotations cancel: +90° + (-90°) = 0° net rotation
+    - glTF still says Y-up in metadata, but geometry data is effectively Z-up
+    - Three.js with camera.up = (0,0,1) renders it correctly
+
+63. **Location Transform vs Vertex Rotation**
+    - `solid.rotate(Axis.X, 90)` modifies geometry vertices - moves translations!
+    - Shape at (0, 20, 78) rotates around world origin → moves to (0, -78, 20)
+    - Parts scatter across space - completely broken
+    - `solid.location *= Location((0,0,0), (1,0,0), 90)` modifies the location matrix
+    - Location transform composes with export_gltf's transform
+    - Translations stay intact - parts remain in position
+
+64. **The Correct Pre-Rotation Code**
+    ```python
+    from build123d import Location
+    original_location = solid.location
+    solid.location *= Location((0, 0, 0), (1, 0, 0), 90)  # +90° X
+    export_gltf(solid, gltf_path)
+    solid.location = original_location  # Restore to avoid side effects
+    ```
+
+65. **Renderer Must NOT Add Rotation**
+    - Previously had `shapeGroup.rotation.x = -Math.PI / 2` or similar
+    - With the pre-rotation fix, NO rotation in renderer
+    - Just: `shapeGroup.add(mesh)` - mesh orientation comes from glTF as-is
+    - Camera already configured for Z-up: `camera.up.set(0, 0, 1)`
+
+66. **System Prompt Simplification**
+    - Before fix: Needed complex `plane=` syntax for every oriented shape
+    - After fix: Natural language works - "pointing up", "pointing forward"
+    - Cylinders/cones default to vertical (+Z) as expected
+    - No more plane= workarounds or orientation tables for AI
+    - AI writes intuitive code, coordinate system handles the rest
+
+67. **Model Prompts Use Natural Language**
+    - Good: "Cylinder pointing up along Z axis"
+    - Good: "Cone pointing forward along Y axis"
+    - Avoid: `plane=Plane.XZ` unless truly unusual orientation needed
+    - The coordinate system fix eliminated most orientation problems
+
+68. **Why Previous Attempts Failed**
+    - Renderer rotation: Only affected display, not underlying data
+    - Toggling between +90°/-90°/0° in renderer: Different symptoms, same problem
+    - The issue was in Python export, not JavaScript rendering
+    - "Going in circles" - kept trying to fix rendering when export was wrong
+
+69. **Debugging Coordinate Mismatches**
+    - If shapes look wrong: Check the ENTIRE pipeline
+    - Source (Build123d) → Export (cad_engine.py) → Load (Three.js) → Render
+    - Each step can transform coordinates
+    - Test with simple primitive (vertical cylinder) to isolate issue
+    - Print coordinates at each stage if needed

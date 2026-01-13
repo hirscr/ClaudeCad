@@ -1,79 +1,88 @@
 # Minion (10cm tall)
 
-Create a Minion character as a 3D solid.
+Create a Minion as a multi-colored 3D model using Compound (not BuildPart).
 
-## Coordinate system
-- X = left/right
-- Z = up/down
-- +Y = front (face points toward +Y)
+## Coordinate System
+- Z = up/down, Y = forward/back, X = left/right
+- Face points toward +Y
 - Units: millimeters
-- Keep everything symmetric about the YZ plane (mirror across X = 0)
-- Use only: sphere, cylinder, box, union, subtract
 
 ---
 
-## 1) Body (pill shape)
-- Cylinder: diameter 40mm, height 50mm, centered at (0, 0, 50)
-- Top hemisphere: sphere radius 20mm, center at (0, 0, 75) - union upper half only via intersection with box
-- Bottom hemisphere: sphere radius 20mm, center at (0, 0, 25) - union lower half only
-- Or simpler: just use a full sphere at top (radius 20mm at Z=75) and full sphere at bottom (radius 20mm at Z=25), union with cylinder
+## 1) Body (yellow pill shape)
+- Cylinder: diameter 40mm, height 50mm, standing upright
+- Center at (0, 0, 50)
+- Top cap: sphere radius 20mm at (0, 0, 75)
+- Bottom cap: sphere radius 20mm at (0, 0, 25)
+- Color: yellow
 
 ---
 
-## 2) Goggle band
-- Cylinder (ring): outer diameter 42mm, inner diameter 38mm (subtract inner), height 8mm
+## 2) Goggle band (black ring around head)
+- Ring: outer diameter 42mm, inner diameter 38mm, height 8mm
 - Center at (0, 0, 70)
-- This wraps around the head
+- Color: black
 
 ---
 
-## 3) Goggle lens housing (single eye - Stuart style)
-- Cylinder: diameter 22mm, depth 8mm, axis along Y
+## 3) Goggle lens housing
+- Cylinder: diameter 22mm, depth 8mm, pointing forward
 - Center at (0, 17, 72)
-- Union to body
+- Color: gray
 
 ---
 
 ## 4) Eye
-- White of eye: sphere diameter 18mm, center at (0, 18, 72)
-- Iris: sphere diameter 10mm, center at (0, 22, 72) - brown area (just geometry, no color)
-- Pupil: sphere diameter 5mm, center at (0, 24, 72) - subtract slightly or union as black dot
+- Eye white: sphere diameter 18mm at (0, 18, 72), color white
+- Iris: sphere diameter 10mm at (0, 22, 72), color blue
+- Pupil: sphere diameter 5mm at (0, 24, 72), color black
 
 ---
 
 ## 5) Mouth
-- Smile groove: subtract a cylinder (radius 12mm, length 30mm, axis along X)
-- Position cylinder center at (0, 18, 50)
-- Limit cut with intersection box: 20mm wide × 10mm deep × 6mm tall, centered at (0, 18, 52)
+- Small box: 20mm wide × 3mm deep × 5mm tall
+- Center at (0, 20, 50)
+- Color: red
 
 ---
 
-## 6) Overalls (simplified as band)
-- Box representing overall bib: 30mm wide × 5mm deep × 35mm tall
+## 6) Overalls bib
+- Box: 30mm wide × 5mm deep × 35mm tall
 - Center at (0, 18, 35)
-- Union to body
-- Optional: subtract two small cylinders for overall buttons at (-8, 20, 50) and (8, 20, 50), radius 2mm
+- Color: blue
 
 ---
 
 ## 7) Arms
-- Two cylinders: diameter 6mm, length 30mm, axis along X (pointing outward)
-- Left arm center: (-23, 0, 55)
-- Right arm center: (23, 0, 55)
-- Union to body
+- Two cylinders: diameter 6mm, length 30mm, pointing outward along X
+- Right arm at (23, 0, 55)
+- Left arm at (-23, 0, 55)
+- Color: yellow
 
 ---
 
 ## 8) Legs
-- Two cylinders: diameter 10mm, height 20mm, axis along Z
-- Left leg center: (-10, 0, 10)
-- Right leg center: (10, 0, 10)
-- Union to body
+- Two cylinders: diameter 10mm, height 20mm, pointing down
+- Right leg at (10, 0, 10)
+- Left leg at (-10, 0, 10)
+- Color: yellow
 
 ---
 
-## 9) Feet (simple boxes)
+## 9) Feet
 - Two boxes: 14mm wide × 20mm deep × 6mm tall
-- Left foot center: (-10, 2, 3)
-- Right foot center: (10, 2, 3)
-- Union to body
+- Right foot at (10, 2, 3)
+- Left foot at (-10, 2, 3)
+- Color: black
+
+---
+
+## Colors Summary
+- Body, arms, legs: yellow
+- Goggle band, feet: black
+- Lens housing: gray
+- Eye white: white
+- Iris: blue
+- Pupil: black
+- Mouth: red
+- Overalls: blue

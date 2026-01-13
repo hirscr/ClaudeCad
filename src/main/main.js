@@ -200,15 +200,14 @@ ipcMain.handle('send-chat-message', async (event, { message, currentCode, histor
             newModel: parsed.newModel
           };
         }
-        // DEBUG: Log colors being passed to renderer
-        console.log('[DEBUG Main] Colors from Python:', JSON.stringify(execResult.colors));
+        // DEBUG: Log shapes being passed to renderer
+        console.log('[DEBUG Main] Shapes from Python:', JSON.stringify(execResult.shapes));
         return {
           success: true,
           code: parsed.code,
           explanation: parsed.explanation,
-          meshPath: execResult.mesh_path,
-          volume: execResult.volume, // Pass volume from Python
-          colors: execResult.colors, // Pass colors from Python (index -> hex)
+          shapes: execResult.shapes, // Array of {mesh_path, color, label}
+          volume: execResult.volume,
           newModel: parsed.newModel
         };
       }
@@ -372,7 +371,7 @@ ipcMain.handle('export-stl', async (event, { code }) => {
 });
 
 // IPC handler for saving project
-ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, currentFilePath, featureColors }) => {
+ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, currentFilePath, featureColors, shapes }) => {
   try {
     console.log('[Main] Received save-project request');
     console.log('[Main] Current file path:', currentFilePath || 'none (new file)');
@@ -380,6 +379,7 @@ ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, c
     console.log('[Main] Code length:', code?.length || 0);
     console.log('[Main] Chat history length:', chatHistory?.length || 0);
     console.log('[Main] Feature colors count:', featureColors ? Object.keys(featureColors).length : 0);
+    console.log('[Main] Shapes count:', shapes?.length || 0);
 
     let filePath = currentFilePath;
 
@@ -406,16 +406,33 @@ ipcMain.handle('save-project', async (event, { code, chatHistory, projectName, c
       console.log('[Main] User selected path:', filePath);
     }
 
-    // Construct project JSON
+    // Convert shape mesh files to base64
+    const shapesForSave = [];
+    if (shapes && Array.isArray(shapes)) {
+      for (const shape of shapes) {
+        if (shape.mesh_path && fs.existsSync(shape.mesh_path)) {
+          const meshData = fs.readFileSync(shape.mesh_path);
+          shapesForSave.push({
+            mesh: meshData.toString('base64'),
+            color: shape.color,
+            label: shape.label
+          });
+        }
+      }
+    }
+    console.log('[Main] Encoded', shapesForSave.length, 'shapes to base64');
+
+    // Construct project JSON with v2.0 format
     const now = new Date().toISOString();
     const projectData = {
-      version: '1.0',
+      version: '2',
       name: projectName || 'untitled',
-      created: now, // For simplicity, using current time (should track this separately in future)
+      created: now,
       modified: now,
       code: code || '',
       chat: chatHistory || [],
-      featureColors: featureColors || {}
+      featureColors: featureColors || {},
+      shapes: shapesForSave
     };
 
     // Write to file
@@ -499,12 +516,47 @@ ipcMain.handle('load-project', async () => {
       };
     }
 
-    // Validate structure
-    if (!projectData.version || !projectData.code === undefined) {
+    // Check version
+    const version = projectData.version || '1.0';
+    console.log('[Main] Project version:', version);
+
+    if (version === '1.0' || version === '1') {
+      // Reject old format with clear message
+      console.log('[Main] Rejecting old v1.0 format');
       return {
         success: false,
-        error: 'Invalid project file: missing required fields'
+        error: 'This project uses an older format that is no longer supported. Please recreate the model.'
       };
+    }
+
+    if (version !== '2' && version !== '2.0') {
+      return {
+        success: false,
+        error: `Unsupported project version: ${version}`
+      };
+    }
+
+    // v2.0: Restore shapes from embedded base64
+    const os = require('os');
+    const tempDir = os.tmpdir();
+    const restoredShapes = [];
+
+    if (projectData.shapes && Array.isArray(projectData.shapes)) {
+      for (let i = 0; i < projectData.shapes.length; i++) {
+        const shape = projectData.shapes[i];
+        const meshPath = path.join(tempDir, `claudecad_restored_${Date.now()}_${i}.glb`);
+
+        // Decode base64 and write to temp file
+        const meshBuffer = Buffer.from(shape.mesh, 'base64');
+        fs.writeFileSync(meshPath, meshBuffer);
+
+        restoredShapes.push({
+          mesh_path: meshPath,
+          color: shape.color,
+          label: shape.label
+        });
+      }
+      console.log('[Main] Restored', restoredShapes.length, 'shapes from base64');
     }
 
     console.log('[Main] Project loaded successfully');
@@ -516,7 +568,10 @@ ipcMain.handle('load-project', async () => {
       success: true,
       isPrompt: false,
       filePath: filePath,
-      projectData: projectData
+      projectData: {
+        ...projectData,
+        shapes: restoredShapes // Replace base64 with temp file paths
+      }
     };
   } catch (err) {
     console.error('[Main] load-project error:', err);
