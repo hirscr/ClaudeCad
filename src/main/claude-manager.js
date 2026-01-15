@@ -12,7 +12,7 @@ const { spawn } = require('child_process');
  * @param {string} tempImageDir - Path to temp image directory (for --add-dir), optional
  * @returns {Promise<string>} Claude's raw response text
  */
-function sendPrompt(prompt, tempImageDir = null) {
+function sendPrompt(prompt, tempImageDir = null, timeout = 30000) {
   return new Promise((resolve, reject) => {
     console.log('[ClaudeManager] Sending prompt to Claude CLI...');
     console.log('[ClaudeManager] Prompt length:', prompt.length);
@@ -46,15 +46,15 @@ function sendPrompt(prompt, tempImageDir = null) {
     let timeoutId = null;
     let isResolved = false;
 
-    // Set 30 second timeout
+    // Set timeout
     timeoutId = setTimeout(() => {
       if (!isResolved) {
-        console.error('[ClaudeManager] Claude CLI timeout (30s)');
+        console.error(`[ClaudeManager] Claude CLI timeout (${timeout / 1000}s)`);
         isResolved = true;
         process.kill();
-        reject(new Error('Claude is taking too long (timeout after 30 seconds)'));
+        reject(new Error(`Claude is taking too long (timeout after ${timeout / 1000} seconds)`));
       }
-    }, 30000);
+    }, timeout);
 
     // Capture stdout
     process.stdout.on('data', (data) => {
@@ -159,6 +159,14 @@ function buildPrompt(userMessage, currentCode, chatHistory, clickInfo = null, im
 
   prompt += '## Coordinate System\n\n';
   prompt += 'Directions: +Z=up, -Z=down, +Y=forward, -Y=backward, +X=right, -X=left\n\n';
+
+  // Build123d API reference
+  prompt += '## Build123d API Quick Reference\n\n';
+  prompt += 'Primitives: Box(length, width, height), Cylinder(radius, height), Sphere(radius), Cone(bottom_r, top_r, height)\n';
+  prompt += 'Position: Pos(x, y, z) * shape\n';
+  prompt += 'Combine: Compound([shapes...]) keeps separate, shape1 + shape2 (union), shape1 - shape2 (subtract)\n';
+  prompt += 'Color: shape.color = Color("red") or Color(0.5, 0.5, 0.5)\n';
+  prompt += 'MUST end with: part = Compound([...]) or part = your_shape\n\n';
 
   prompt += '## Shape Orientation\n\n';
   prompt += 'Shapes orient naturally based on description:\n';
@@ -550,6 +558,14 @@ function buildCodeFromSpecPrompt(spec) {
   prompt += '## Coordinate System\n\n';
   prompt += 'Directions: +Z=up, -Z=down, +Y=forward, -Y=backward, +X=right, -X=left\n\n';
 
+  // Build123d API reference
+  prompt += '## Build123d API Quick Reference\n\n';
+  prompt += 'Primitives: Box(length, width, height), Cylinder(radius, height), Sphere(radius), Cone(bottom_r, top_r, height)\n';
+  prompt += 'Position: Pos(x, y, z) * shape\n';
+  prompt += 'Combine: Compound([shapes...]) keeps separate, shape1 + shape2 (union), shape1 - shape2 (subtract)\n';
+  prompt += 'Color: shape.color = Color("red") or Color(0.5, 0.5, 0.5)\n';
+  prompt += 'MUST end with: part = Compound([...]) or part = your_shape\n\n';
+
   // Limitations
   prompt += '# Limitations\n\n';
   prompt += '- Only uniform scaling is supported (no stretched/squashed shapes like ellipsoids)\n';
@@ -576,7 +592,8 @@ function buildCodeFromSpecPrompt(spec) {
 }
 
 /**
- * Build iteration prompt for autonomous iteration mode.
+ * Build iteration prompt for autonomous iteration mode (SHAPE ONLY).
+ * Colors are handled in a separate pass.
  *
  * @param {Object} params
  * @param {string} params.originalRequest - User's original request
@@ -586,6 +603,7 @@ function buildCodeFromSpecPrompt(spec) {
  * @param {string} params.currentCode - Current Build123d code (may be empty on first iteration)
  * @param {number} params.iteration - Current iteration number
  * @param {number} params.maxIterations - Maximum iterations
+ * @param {string} params.previousError - Optional error from previous attempt
  * @returns {string} The complete prompt
  */
 function buildIterationPrompt({
@@ -595,78 +613,101 @@ function buildIterationPrompt({
   viewportNumber,
   currentCode,
   iteration,
-  maxIterations
+  maxIterations,
+  previousError = null
 }) {
   let prompt = '';
 
-  // Role
-  prompt += '# Role\n\n';
-  prompt += 'You are a CAD assistant in autonomous iteration mode. Your task is to generate Build123d Python code that matches the reference images.\n\n';
+  prompt += `# Shape Iteration ${iteration}/${maxIterations}\n\n`;
+  prompt += `Goal: "${originalRequest}"\n\n`;
 
-  // Iteration context
-  prompt += '# Iteration Context\n\n';
-  prompt += `This is iteration ${iteration} of ${maxIterations}.\n\n`;
-  prompt += `User's original request: "${originalRequest}"\n\n`;
+  // Previous error (if retrying)
+  if (previousError) {
+    prompt += '# Previous Error\n';
+    prompt += `Your last code failed: "${previousError}". Fix this error and try again.\n\n`;
+  }
 
   // Images
-  prompt += '# Images\n\n';
-  prompt += `You have ${referenceImages.length} reference image(s) to match:\n`;
+  prompt += '# Images\n';
   for (const img of referenceImages) {
-    prompt += `- Image ${img.number}: ${img.path}\n`;
+    prompt += `Reference ${img.number}: ${img.path}\n`;
   }
-  prompt += `\nCurrent viewport (Image ${viewportNumber}): ${viewportPath}\n\n`;
+  prompt += `Current viewport: ${viewportPath}\n\n`;
 
-  // Current state
+  // Current code
   if (currentCode) {
-    prompt += '# Current Code\n\n';
-    prompt += 'Here is the current Build123d code:\n\n';
-    prompt += '```python\n';
-    prompt += currentCode;
-    prompt += '\n```\n\n';
+    prompt += '# Current Code\n```python\n' + currentCode + '\n```\n\n';
   } else {
-    prompt += '# Current State\n\n';
-    prompt += 'No code yet. This is the first iteration - generate the initial model.\n\n';
+    prompt += '# Current Code\nNone yet - generate initial model.\n\n';
   }
 
-  // Code requirements (reuse from buildPrompt)
-  prompt += '# Code Requirements\n\n';
-  prompt += 'IMPORTANT: Choose the right pattern based on what you need:\n\n';
+  // Build123d API reference
+  prompt += '# Build123d API\n';
+  prompt += 'Primitives: Box(length, width, height), Cylinder(radius, height), Sphere(radius), Cone(bottom_r, top_r, height)\n';
+  prompt += 'Position: Pos(x, y, z) * shape\n';
+  prompt += 'Combine: Compound([shapes...]) or shape1 + shape2 (union) or shape1 - shape2 (subtract)\n';
+  prompt += 'Color: shape.color = Color("gray")\n\n';
 
-  prompt += '## Multi-Colored Shapes (DEFAULT)\n\n';
-  prompt += 'DO NOT use BuildPart() - it fuses shapes into one solid and loses individual colors.\n\n';
-  prompt += 'Rules:\n';
-  prompt += '- Create shapes: Box(), Sphere(), Cylinder(), Cone(), etc.\n';
-  prompt += '- Position shapes: Pos(x, y, z) * shape (NOT shape @ Pos - that doesn\'t work)\n';
-  prompt += '- Assign colors: shape.color = Color("red") or Color(r, g, b)\n';
-  prompt += '- Group with Compound([shape1, shape2, ...]) - keeps shapes separate\n';
-  prompt += '- For oriented cones/cylinders: Pos(x,y,z) * Solid.make_cone(..., plane=...) or Solid.make_cylinder(..., plane=...)\n';
-  prompt += '- CRITICAL: Final result MUST be assigned to variable named `part`\n\n';
+  // Comparison guidance
+  prompt += '# Comparison Method\n';
+  prompt += '1. Compare SILHOUETTES - outline shape of reference vs current\n';
+  prompt += '2. State height:width RATIO (e.g., "Reference 2:1 tall, current 1:1")\n';
+  prompt += '3. Identify DISTINCTIVE FEATURES that protrude (antennas, arms, legs)\n\n';
 
-  prompt += '## Single Fused Solid (only when needed)\n\n';
-  prompt += 'Use BuildPart() ONLY when you need boolean operations or intentional fusing.\n\n';
+  // Instructions - kept short
+  prompt += '# Rules\n';
+  prompt += '- IGNORE COLORS - use Color("gray") for ALL shapes\n';
+  prompt += '- Focus ONLY on shape, size, proportions, positions\n';
+  prompt += '- Use NAMED VARIABLES for parts (e.g., head, body, leg_left)\n';
+  prompt += '- Positioning: Pos(x,y,z) * shape\n';
+  prompt += '- End with: part = Compound([list of parts])\n';
+  prompt += '- Priority: proportions > major parts > positions/angles\n';
+  prompt += '- Fix up to 3 shape issues per iteration\n\n';
 
-  prompt += '## General Rules\n\n';
-  prompt += '- DO NOT include any export lines - handled automatically\n';
-  prompt += '- All measurements in millimeters\n';
-  prompt += '- Named colors: red, blue, green, yellow, white, black, orange, purple, cyan, magenta, gray\n';
-  prompt += '- RGB colors: Color(r, g, b) with values 0-1\n\n';
+  prompt += '# Response\n';
+  prompt += 'If shape matches reference: NO_CHANGES\n\n';
+  prompt += 'Otherwise:\n';
+  prompt += 'Issue: [describe 1-3 shape problems]\n';
+  prompt += '```python\n# code\n```\n';
 
-  prompt += '## Coordinate System\n\n';
-  prompt += 'Directions: +Z=up, -Z=down, +Y=forward, -Y=backward, +X=right, -X=left\n\n';
+  return prompt;
+}
 
-  // Task
-  prompt += '# Task\n\n';
-  prompt += 'Compare the current viewport to the reference images. Then:\n\n';
-  prompt += '1. If the model matches the reference well enough, respond with ONLY: NO_CHANGES\n';
-  prompt += '2. Otherwise, generate improved Build123d code to better match the reference\n\n';
+/**
+ * Build color pass prompt for applying colors after shape iterations.
+ *
+ * @param {Object} params
+ * @param {Array} params.referenceImages - Reference images [{number, path}]
+ * @param {string} params.currentCode - Current Build123d code with correct shapes
+ * @returns {string} The complete prompt
+ */
+function buildColorPassPrompt({ referenceImages, currentCode }) {
+  let prompt = '';
 
-  prompt += '# Response Format\n\n';
-  prompt += 'Option 1 (model matches): NO_CHANGES\n\n';
-  prompt += 'Option 2 (needs improvement):\n';
-  prompt += '```python\n';
-  prompt += '# Your improved code here\n';
-  prompt += '```\n\n';
-  prompt += 'CRITICAL: Your code MUST end with assigning the final geometry to a variable named `part`\n';
+  prompt += '# Color Pass\n\n';
+  prompt += 'The shape is correct. Now apply the correct colors from the reference.\n\n';
+
+  // Images
+  prompt += '# Reference Images\n';
+  for (const img of referenceImages) {
+    prompt += `Image ${img.number}: ${img.path}\n`;
+  }
+  prompt += '\n';
+
+  // Current code
+  prompt += '# Current Code\n```python\n' + currentCode + '\n```\n\n';
+
+  // Instructions
+  prompt += '# Rules\n';
+  prompt += '- DO NOT change any geometry, sizes, or positions\n';
+  prompt += '- ONLY change Color() values to match reference\n';
+  prompt += '- List the color for each named part before coding\n\n';
+
+  prompt += '# Response\n';
+  prompt += 'If colors already correct: NO_CHANGES\n\n';
+  prompt += 'Otherwise:\n';
+  prompt += 'Colors: part1=color1, part2=color2, ...\n';
+  prompt += '```python\n# code with correct colors\n```\n';
 
   return prompt;
 }
@@ -711,6 +752,7 @@ module.exports = {
   buildDesignPrompt,
   buildCodeFromSpecPrompt,
   buildIterationPrompt,
+  buildColorPassPrompt,
   parseResponse,
   parseDesignResponse,
   parseIterationResponse,

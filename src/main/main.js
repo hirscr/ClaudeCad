@@ -41,7 +41,7 @@ function clearTempDir() {
 /**
  * Downscale image to max dimension (to reduce CLI latency)
  */
-function downscaleImage(imageBuffer, maxDimension = 768) {
+function downscaleImage(imageBuffer, maxDimension = 512) {
   const image = nativeImage.createFromBuffer(imageBuffer);
   const size = image.getSize();
 
@@ -521,8 +521,8 @@ ipcMain.handle('send-design-message', async (event, { message, currentSpec, hist
     // Build design prompt
     const prompt = claudeManager.buildDesignPrompt(message, currentSpec, history);
 
-    // Send to Claude (no images for design mode)
-    const response = await claudeManager.sendPrompt(prompt, null);
+    // Send to Claude (60s timeout for design mode - generates more content)
+    const response = await claudeManager.sendPrompt(prompt, null, 60000);
 
     // Parse response (just return the spec text)
     const parsed = claudeManager.parseDesignResponse
@@ -569,9 +569,9 @@ ipcMain.handle('build-from-spec', async (event, { spec }) => {
       // Build prompt for code generation
       const prompt = claudeManager.buildCodeFromSpecPrompt(currentSpec);
 
-      // Send to Claude (no images for spec-based generation)
+      // Send to Claude (60s timeout for spec-based generation)
       console.log('[Main] Sending spec to Claude for code generation...');
-      const response = await claudeManager.sendPrompt(prompt, null);
+      const response = await claudeManager.sendPrompt(prompt, null, 60000);
 
       // Parse response
       const parsed = claudeManager.parseResponse(response);
@@ -886,10 +886,11 @@ ipcMain.handle('run-iteration-step', async (event, {
   viewportNumber,
   currentCode,
   iteration,
-  maxIterations
+  maxIterations,
+  previousError = null
 }) => {
   try {
-    console.log(`[Main] Running iteration step ${iteration}/${maxIterations}`);
+    console.log(`[Main] Running iteration step ${iteration}/${maxIterations}${previousError ? ' (retry)' : ''}`);
 
     // Build iteration prompt
     const prompt = claudeManager.buildIterationPrompt({
@@ -899,11 +900,12 @@ ipcMain.handle('run-iteration-step', async (event, {
       viewportNumber,
       currentCode,
       iteration,
-      maxIterations
+      maxIterations,
+      previousError
     });
 
-    // Send to Claude
-    const rawResponse = await claudeManager.sendPrompt(prompt, TEMP_IMAGE_DIR);
+    // Send to Claude (90s timeout for image-heavy iteration prompts)
+    const rawResponse = await claudeManager.sendPrompt(prompt, TEMP_IMAGE_DIR, 90000);
 
     // Parse response
     const parsed = claudeManager.parseIterationResponse(rawResponse);
@@ -951,6 +953,74 @@ ipcMain.handle('run-iteration-step', async (event, {
     };
   } catch (err) {
     console.error('[Main] Iteration step error:', err);
+    return {
+      success: false,
+      type: 'error',
+      error: err.message
+    };
+  }
+});
+
+// IPC handler for color pass (Phase 8 - two-phase iteration)
+ipcMain.handle('run-color-pass', async (event, { referenceImages, currentCode }) => {
+  try {
+    console.log('[Main] Running color pass');
+
+    // Build color pass prompt
+    const prompt = claudeManager.buildColorPassPrompt({
+      referenceImages,
+      currentCode
+    });
+
+    // Send to Claude (90s timeout)
+    const rawResponse = await claudeManager.sendPrompt(prompt, TEMP_IMAGE_DIR, 90000);
+
+    // Parse response (reuse iteration parser - same format)
+    const parsed = claudeManager.parseIterationResponse(rawResponse);
+
+    if (parsed.type === 'no_changes') {
+      console.log('[Main] Colors already correct');
+      return {
+        success: true,
+        type: 'no_changes',
+        message: 'Colors already match reference.'
+      };
+    }
+
+    if (parsed.type === 'invalid') {
+      console.error('[Main] Invalid color pass response format');
+      return {
+        success: false,
+        type: 'invalid',
+        error: 'Claude response did not match expected format.',
+        raw: parsed.raw
+      };
+    }
+
+    // Execute the colored code
+    console.log('[Main] Executing color pass code...');
+    const execResult = await pythonManager.execute(parsed.code);
+
+    if (!execResult.success) {
+      console.error('[Main] Color pass code execution failed:', execResult.error);
+      return {
+        success: false,
+        type: 'execution_error',
+        error: execResult.error,
+        code: parsed.code
+      };
+    }
+
+    console.log('[Main] Color pass successful');
+    return {
+      success: true,
+      type: 'code',
+      code: parsed.code,
+      shapes: execResult.shapes,
+      volume: execResult.volume
+    };
+  } catch (err) {
+    console.error('[Main] Color pass error:', err);
     return {
       success: false,
       type: 'error',
@@ -1084,6 +1154,14 @@ app.whenReady().then(async () => {
           click: () => {
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('menu-refresh-context');
+            }
+          }
+        },
+        {
+          label: 'Clear Chat History',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('menu-clear-chat');
             }
           }
         },

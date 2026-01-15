@@ -1789,6 +1789,21 @@ ipcRenderer.on('menu-refresh-context', () => {
   refreshContext();
 });
 
+ipcRenderer.on('menu-clear-chat', () => {
+  // Clear message history but keep model
+  messageHistory.length = 0;
+
+  // Clear chat panel DOM
+  const chatPanel = document.getElementById('chat-messages');
+  if (chatPanel) {
+    chatPanel.innerHTML = '';
+  }
+
+  // Add system message
+  addMessage('system', 'Chat history cleared.');
+  console.log('[Renderer] Chat history cleared');
+});
+
 ipcRenderer.on('menu-toggle-design-mode', () => {
   toggleDesignMode();
 });
@@ -1908,7 +1923,7 @@ async function saveProject() {
     const chatHistoryForSave = messageHistory.map(msg => ({
       role: msg.role,
       content: msg.content,
-      timestamp: msg.timestamp.toISOString(),
+      timestamp: (msg.timestamp || new Date()).toISOString(),
       images: msg.images // Include image paths if present
     }));
 
@@ -2641,6 +2656,7 @@ function addMessage(role, content, options = {}) {
     const historyMessage = {
       role,
       content,
+      timestamp: new Date(),
       images: options.images?.map(img => ({ number: img.number, path: img.path }))
     };
     messageHistory.push(historyMessage);
@@ -3875,7 +3891,7 @@ function updateIterationCounter(current, max) {
  */
 async function startIterationLoop() {
   // Capture state at start
-  const maxIterations = parseInt(document.getElementById('max-iterations-input')?.value || '10');
+  const maxIterations = parseInt(document.getElementById('max-iterations-input')?.value || '20');
   const referenceImages = pendingImages.map(img => ({ number: img.number, path: img.path }));
   const originalRequest = document.getElementById('chat-input').value.trim();
 
@@ -3906,24 +3922,36 @@ async function startIterationLoop() {
     addMessage('system', 'No existing model - first iteration will generate initial version.');
   }
 
+  // Flag to trigger color pass in finally block
+  let runColorPass = false;
+  const maxRetries = 3;
+
   try {
-    for (let i = 1; i <= maxIterations; i++) {
+    let iteration = 1;
+    let retryCount = 0;
+    let previousError = null;
+
+    while (iteration <= maxIterations) {
       // Check stop request
       if (iterationState.stopRequested) {
-        addMessage('system', `Stopped at iteration ${i - 1}.`);
+        addMessage('system', `Stopped at iteration ${iteration - 1}.`);
         break;
       }
 
-      iterationState.current = i;
-      updateIterationCounter(i, maxIterations);
+      iterationState.current = iteration;
+      updateIterationCounter(iteration, maxIterations);
 
       // 1. Capture current viewport
-      statusText.textContent = `Capturing viewport (${i}/${maxIterations})...`;
+      statusText.textContent = retryCount > 0
+        ? `Retry ${retryCount}/${maxRetries} for iteration ${iteration}...`
+        : `Capturing viewport (${iteration}/${maxIterations})...`;
       const viewport = await saveViewportScreenshot();
 
       // 2. Run iteration step
       setProcessing('claude');
-      statusText.textContent = `Iteration ${i}/${maxIterations}: Asking Claude...`;
+      statusText.textContent = retryCount > 0
+        ? `Iteration ${iteration}/${maxIterations}: Retrying (${retryCount}/${maxRetries})...`
+        : `Iteration ${iteration}/${maxIterations}: Asking Claude...`;
 
       const result = await ipcRenderer.invoke('run-iteration-step', {
         originalRequest,
@@ -3931,8 +3959,9 @@ async function startIterationLoop() {
         viewportPath: viewport.path,
         viewportNumber: viewport.number,
         currentCode,
-        iteration: i,
-        maxIterations
+        iteration,
+        maxIterations,
+        previousError
       });
 
       // Clean up viewport thumbnail
@@ -3941,21 +3970,39 @@ async function startIterationLoop() {
       // 3. Handle result
       if (result.type === 'no_changes') {
         addMessage('assistant', 'Model matches reference. Stopping iteration.');
+        runColorPass = true;
         break;
       }
 
       if (!result.success) {
-        addMessage('error', `Iteration ${i} failed: ${result.error}`);
-        // Continue trying unless it's a critical error
-        if (result.type === 'error') break;
+        // Execution failed - retry same iteration
+        retryCount++;
+        previousError = result.error;
+
+        if (retryCount >= maxRetries) {
+          addMessage('error', `Iteration ${iteration} failed after ${maxRetries} retries: ${result.error}`);
+          // Critical failure - stop entirely
+          if (result.type === 'error') break;
+          // Move to next iteration after max retries
+          iteration++;
+          retryCount = 0;
+          previousError = null;
+        } else {
+          addMessage('warning', `Iteration ${iteration} failed, retrying (${retryCount}/${maxRetries}): ${result.error}`);
+        }
         continue;
       }
+
+      // Success - clear retry state
+      retryCount = 0;
+      previousError = null;
 
       // 4. Check for unchanged code (oscillation detection)
       if (result.code === iterationState.previousCode) {
         iterationState.unchangedCount++;
         if (iterationState.unchangedCount >= 2) {
           addMessage('system', 'Code unchanged for 2 iterations. Stopping.');
+          runColorPass = true;
           break;
         }
       } else {
@@ -3980,6 +4027,7 @@ async function startIterationLoop() {
 
       if (usage.ratio >= TOKEN_CONFIG.STOP_THRESHOLD) {
         addMessage('warning', `Context limit reached (${usage.percentage}%). Stopping iteration.`);
+        runColorPass = true;
         break;
       }
 
@@ -3991,14 +4039,52 @@ async function startIterationLoop() {
       // Update token display if available
       updateTokenDisplay();
 
-      addMessage('system', `Iteration ${i} complete.`);
+      addMessage('system', `Iteration ${iteration} complete.`);
+
+      // Advance to next iteration
+      iteration++;
 
       // Small delay to allow UI to update
       await new Promise(resolve => setTimeout(resolve, 100));
     }
+
+    // Loop completed normally (reached maxIterations)
+    if (iteration > maxIterations) {
+      runColorPass = true;
+    }
   } catch (err) {
     addMessage('error', `Iteration loop error: ${err.message}`);
   } finally {
+    // Color pass - runs in finally to guarantee execution
+    if (runColorPass && currentCode) {
+      console.log('[Renderer] Running color pass...');
+      addMessage('system', 'Applying colors...');
+      setProcessing('claude');
+      statusText.textContent = 'Applying colors from reference...';
+
+      try {
+        const colorResult = await ipcRenderer.invoke('run-color-pass', {
+          referenceImages: iterationState.referenceImages,
+          currentCode
+        });
+
+        console.log('[Renderer] Color pass result:', colorResult);
+
+        if (colorResult.success && colorResult.type === 'code') {
+          currentCode = colorResult.code;
+          await loadShapes(colorResult.shapes, colorResult.volume);
+          addMessage('system', 'Colors applied successfully.');
+        } else if (colorResult.type === 'no_changes') {
+          addMessage('system', 'Colors already correct.');
+        } else if (!colorResult.success) {
+          addMessage('warning', `Color pass failed: ${colorResult.error || 'Unknown error'}`);
+        }
+      } catch (colorErr) {
+        console.error('[Renderer] Color pass error:', colorErr);
+        addMessage('warning', `Color pass error: ${colorErr.message}`);
+      }
+    }
+
     // Cleanup
     iterationState.active = false;
     hideIterationUI();
