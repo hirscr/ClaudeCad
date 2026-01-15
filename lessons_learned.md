@@ -432,3 +432,72 @@
     - Each step can transform coordinates
     - Test with simple primitive (vertical cylinder) to isolate issue
     - Print coordinates at each stage if needed
+
+## Phase 8: Autonomous Iteration Mode
+
+### Two-Phase Iteration Architecture
+
+70. **Separate Shape Iteration from Color Pass**
+    - Shape iterations use all gray - ignore colors entirely
+    - Color pass runs once at end when shape is finalized
+    - Avoids shape/color oscillation during iteration
+    - Simpler prompt = faster iterations
+
+71. **Error Retry vs Iteration Advancement**
+    - Code execution errors should retry SAME iteration with error feedback
+    - NOT count as a new iteration
+    - Matches normal chat behavior (error → retry → success)
+    - Add retry limit (3) to avoid infinite loops
+
+72. **Build123d API Reference Is Mandatory**
+    - When iteration prompt was trimmed too short, Claude hallucinated API calls
+    - Examples: `Cyl` instead of `Cylinder`, `Box(center=...)`, `Sphere(angle1=...)`
+    - API cheat sheet must stay in prompt even if it adds tokens
+    - Short reference: primitives, positioning, combining, colors
+
+### Timeouts by Mode
+
+73. **Timeout Hierarchy**
+    - Regular chat: 30 seconds
+    - Design mode: 60 seconds (generates more content)
+    - Iteration mode: 90 seconds (image analysis + code generation)
+    - Complex operations need longer timeouts
+
+### Claude CLI Image Input
+
+74. **File Paths Work Inline**
+    - Just include file path in prompt text: "Image 1: /path/to/img.png"
+    - Add `--add-dir /path/to/images` flag to Claude CLI spawn
+    - No API switch needed - CLI handles it
+    - Downscale images to 512px to reduce tokens and latency
+
+### Context Management for Iteration
+
+75. **Reset Context Each Turn**
+    - Don't accumulate history across iterations
+    - Each iteration gets fresh prompt with: original request + reference images + current viewport + current code
+    - Avoids context drift and hallucination buildup
+    - Previous viewport screenshots not needed - only current one
+
+### Color Pass Implementation
+
+76. **Finally Block with Flag Pattern**
+    - Color pass wasn't running when placed in try block
+    - Move to finally block with `runColorPass` flag
+    - Set flag true on successful exits (NO_CHANGES, convergence, loop complete)
+    - Don't set flag on user stop or critical error
+
+### Defensive Programming
+
+77. **All Messages Need Timestamps**
+    - New code paths (iteration system messages, errors) easy to miss
+    - Save crashes on `undefined.toISOString()`
+    - Fix: Ensure timestamp in addMessage, add fallback in serialization
+    - Pattern: `(msg.timestamp || new Date()).toISOString()`
+
+### UI Design
+
+78. **Icon Distinctiveness Matters**
+    - Two similar circular arrow icons caused user confusion (Clear Context vs Auto-Iterate)
+    - Solution: Clear Context = 🧠 (brain), Auto-Iterate = 🤖 (robot)
+    - Icons should be visually distinct at a glance

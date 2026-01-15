@@ -592,14 +592,53 @@ function buildCodeFromSpecPrompt(spec) {
 }
 
 /**
+ * Strip comments from Python code to prevent drift during iteration.
+ * Removes single-line comments (#...) and multi-line docstrings ("""...""" or '''...''').
+ *
+ * @param {string} code - Python code
+ * @returns {string} Code with comments stripped
+ */
+function stripPythonComments(code) {
+  if (!code) return code;
+
+  // Remove multi-line docstrings ("""...""" or '''...''')
+  let stripped = code.replace(/"""[\s\S]*?"""/g, '');
+  stripped = stripped.replace(/'''[\s\S]*?'''/g, '');
+
+  // Remove single-line comments, but preserve the line structure
+  const lines = stripped.split('\n');
+  const cleanedLines = lines
+    .map(line => {
+      // Find # that's not inside a string
+      // Simple approach: remove everything after # if it's not inside quotes
+      const hashIndex = line.indexOf('#');
+      if (hashIndex === -1) return line;
+
+      // Check if # is inside a string (simple heuristic: count quotes before it)
+      const beforeHash = line.substring(0, hashIndex);
+      const singleQuotes = (beforeHash.match(/'/g) || []).length;
+      const doubleQuotes = (beforeHash.match(/"/g) || []).length;
+
+      // If both quote counts are even, the # is outside strings
+      if (singleQuotes % 2 === 0 && doubleQuotes % 2 === 0) {
+        return line.substring(0, hashIndex).trimEnd();
+      }
+      return line;
+    })
+    .filter(line => line.trim() !== ''); // Remove empty lines
+
+  return cleanedLines.join('\n');
+}
+
+/**
  * Build iteration prompt for autonomous iteration mode (SHAPE ONLY).
  * Colors are handled in a separate pass.
+ * Code comments are stripped to prevent drift.
  *
  * @param {Object} params
- * @param {string} params.originalRequest - User's original request
+ * @param {string} params.originalRequest - User's original request (verbatim)
  * @param {Array} params.referenceImages - Reference images [{number, path}]
- * @param {string} params.viewportPath - Path to current viewport screenshot
- * @param {number} params.viewportNumber - Image number of viewport screenshot
+ * @param {Array} params.viewportPaths - Current viewport screenshots [{angle, path}]
  * @param {string} params.currentCode - Current Build123d code (may be empty on first iteration)
  * @param {number} params.iteration - Current iteration number
  * @param {number} params.maxIterations - Maximum iterations
@@ -609,8 +648,7 @@ function buildCodeFromSpecPrompt(spec) {
 function buildIterationPrompt({
   originalRequest,
   referenceImages,
-  viewportPath,
-  viewportNumber,
+  viewportPaths,
   currentCode,
   iteration,
   maxIterations,
@@ -632,42 +670,52 @@ function buildIterationPrompt({
   for (const img of referenceImages) {
     prompt += `Reference ${img.number}: ${img.path}\n`;
   }
-  prompt += `Current viewport: ${viewportPath}\n\n`;
+  // Output viewport(s) - multiple if angle-specific captures were made
+  for (const vp of viewportPaths) {
+    if (vp.angle === 'current') {
+      prompt += `Current viewport: ${vp.path}\n`;
+    } else {
+      prompt += `Current ${vp.angle} view: ${vp.path}\n`;
+    }
+  }
+  prompt += '\n';
 
-  // Current code
+  // Current code (with comments stripped to prevent drift)
   if (currentCode) {
-    prompt += '# Current Code\n```python\n' + currentCode + '\n```\n\n';
+    const cleanCode = stripPythonComments(currentCode);
+    prompt += '# Current Code\n```python\n' + cleanCode + '\n```\n\n';
   } else {
     prompt += '# Current Code\nNone yet - generate initial model.\n\n';
   }
 
   // Build123d API reference
   prompt += '# Build123d API\n';
-  prompt += 'Primitives: Box(length, width, height), Cylinder(radius, height), Sphere(radius), Cone(bottom_r, top_r, height)\n';
+  prompt += 'Primitives: Box(length, width, height), Cylinder(radius, height), Sphere(radius), Cone(bottom_r, top_r, height), Wedge(xsize, ysize, zsize, xmin, xmax, zmin, zmax), Torus(major_r, minor_r)\n';
   prompt += 'Position: Pos(x, y, z) * shape\n';
-  prompt += 'Combine: Compound([shapes...]) or shape1 + shape2 (union) or shape1 - shape2 (subtract)\n';
-  prompt += 'Color: shape.color = Color("gray")\n\n';
+  prompt += 'Combine: Compound([shapes...]) or shape1 + shape2 (union) or shape1 - shape2 (subtract)\n\n';
 
-  // Comparison guidance
-  prompt += '# Comparison Method\n';
-  prompt += '1. Compare SILHOUETTES - outline shape of reference vs current\n';
-  prompt += '2. State height:width RATIO (e.g., "Reference 2:1 tall, current 1:1")\n';
-  prompt += '3. Identify DISTINCTIVE FEATURES that protrude (antennas, arms, legs)\n\n';
+  // Instructions
+  prompt += '# Instructions\n';
+  prompt += '1. Study the reference images first. They are ground truth.\n';
+  prompt += '2. Compare current viewport to reference. List what\'s wrong or missing.\n';
+  prompt += '3. Fix up to 3 shape issues per iteration.\n\n';
 
-  // Instructions - kept short
+  // Rules
   prompt += '# Rules\n';
-  prompt += '- IGNORE COLORS - use Color("gray") for ALL shapes\n';
-  prompt += '- Focus ONLY on shape, size, proportions, positions\n';
-  prompt += '- Use NAMED VARIABLES for parts (e.g., head, body, leg_left)\n';
+  prompt += '- Create ALL visible details as separate shapes (bands, panels, stripes, grooves, buttons, vents)\n';
+  prompt += '- Use Color("gray") for everything — colors applied in final pass\n';
+  prompt += '- Use NAMED VARIABLES for parts (e.g., dome, base, band, panel, ring)\n';
+  prompt += '- Do NOT include comments in code\n';
   prompt += '- Positioning: Pos(x,y,z) * shape\n';
   prompt += '- End with: part = Compound([list of parts])\n';
-  prompt += '- Priority: proportions > major parts > positions/angles\n';
-  prompt += '- Fix up to 3 shape issues per iteration\n\n';
+  prompt += '- The final variable MUST be named \'part\' — not \'result\', not \'model\', not anything else\n';
+  prompt += '- MUST use Compound() — bare lists like [shape1, shape2] will fail\n';
+  prompt += '- Priority: proportions > major parts > detail shapes > positions\n\n';
 
   prompt += '# Response\n';
-  prompt += 'If shape matches reference: NO_CHANGES\n\n';
+  prompt += 'If shape matches reference exactly: NO_CHANGES\n\n';
   prompt += 'Otherwise:\n';
-  prompt += 'Issue: [describe 1-3 shape problems]\n';
+  prompt += 'Missing/Wrong: [list 1-3 specific shape differences]\n';
   prompt += '```python\n# code\n```\n';
 
   return prompt;
@@ -701,13 +749,15 @@ function buildColorPassPrompt({ referenceImages, currentCode }) {
   prompt += '# Rules\n';
   prompt += '- DO NOT change any geometry, sizes, or positions\n';
   prompt += '- ONLY change Color() values to match reference\n';
+  prompt += '- Syntax: shape.color = Color("name") or shape.color = Color(r, g, b) with floats 0-1\n';
+  prompt += '- DO NOT write Color(shape, "color") — that is invalid\n';
   prompt += '- List the color for each named part before coding\n\n';
 
   prompt += '# Response\n';
   prompt += 'If colors already correct: NO_CHANGES\n\n';
   prompt += 'Otherwise:\n';
   prompt += 'Colors: part1=color1, part2=color2, ...\n';
-  prompt += '```python\n# code with correct colors\n```\n';
+  prompt += '```python\ndome.color = Color("silver")\nbody.color = Color(0.2, 0.4, 0.8)\n# ... full code with colors\n```\n';
 
   return prompt;
 }

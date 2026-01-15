@@ -167,6 +167,32 @@ def extract_colors(code):
         'grey': '#808080',
     }
 
+    # Step 0: Build color variable lookup table
+    # Pattern: varname = Color(r, g, b) where r,g,b are simple floats
+    color_vars = {}
+
+    # Match: varname = Color(r, g, b)
+    var_color_def_pattern = r'^(\w+)\s*=\s*Color\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)'
+    for match in re.finditer(var_color_def_pattern, code, re.MULTILINE):
+        var_name = match.group(1)
+        r = float(match.group(2))
+        g = float(match.group(3))
+        b = float(match.group(4))
+        hex_color = '#{:02x}{:02x}{:02x}'.format(
+            int(r * 255), int(g * 255), int(b * 255)
+        )
+        color_vars[var_name] = hex_color
+
+    # Match: varname = Color("color_name")
+    var_color_named_pattern = r'^(\w+)\s*=\s*Color\s*\(\s*["\'](\w+)["\']\s*\)'
+    for match in re.finditer(var_color_named_pattern, code, re.MULTILINE):
+        var_name = match.group(1)
+        color_name = match.group(2).lower()
+        hex_color = color_name_to_hex.get(color_name, '#808080')
+        color_vars[var_name] = hex_color
+
+    print(f"[DEBUG extract_colors] color_vars lookup table: {color_vars}", file=sys.stderr)
+
     # Step 1: Extract variable -> color mappings
     var_colors = {}
 
@@ -189,6 +215,16 @@ def extract_colors(code):
             int(r * 255), int(g * 255), int(b * 255)
         )
         var_colors[var_name] = hex_color
+
+    # Pattern: variable_name.color = color_variable (variable reference)
+    var_ref_pattern = r'(\w+)\.color\s*=\s*(\w+)\s*$'
+    for match in re.finditer(var_ref_pattern, code, re.MULTILINE):
+        shape_name = match.group(1)
+        color_var_name = match.group(2)
+        # Look up the color variable in our lookup table
+        if color_var_name in color_vars:
+            var_colors[shape_name] = color_vars[color_var_name]
+            print(f"[DEBUG extract_colors] Resolved {shape_name}.color = {color_var_name} -> {color_vars[color_var_name]}", file=sys.stderr)
 
     # DEBUG: Log var_colors found
     print(f"[DEBUG extract_colors] var_colors found: {var_colors}", file=sys.stderr)

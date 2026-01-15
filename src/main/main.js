@@ -39,6 +39,23 @@ function clearTempDir() {
 }
 
 /**
+ * Detect which view angles are requested in the user's prompt.
+ * Scans for keywords: front, left, right (case insensitive, word boundaries).
+ * @param {string} prompt - User's original request
+ * @returns {string[]} Array of detected angles, e.g., ['front', 'left']
+ */
+function detectRequestedAngles(prompt) {
+  const angles = [];
+  const text = prompt.toLowerCase();
+
+  if (/\bfront\b/.test(text)) angles.push('front');
+  if (/\bleft\b/.test(text)) angles.push('left');
+  if (/\bright\b/.test(text)) angles.push('right');
+
+  return angles;
+}
+
+/**
  * Downscale image to max dimension (to reduce CLI latency)
  */
 function downscaleImage(imageBuffer, maxDimension = 512) {
@@ -878,6 +895,35 @@ ipcMain.handle('clear-temp-images', () => {
   return { success: true };
 });
 
+/**
+ * Request angle viewport capture from renderer process.
+ * @param {string} angle - 'front', 'left', or 'right'
+ * @returns {Promise<{angle, path, number}>} Captured viewport info
+ */
+function captureAngleViewportFromRenderer(angle) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      ipcMain.removeListener('capture-angle-viewport-reply', handler);
+      reject(new Error(`Angle capture timeout for ${angle}`));
+    }, 10000);
+
+    const handler = (event, result) => {
+      if (result.angle === angle) {
+        clearTimeout(timeout);
+        ipcMain.removeListener('capture-angle-viewport-reply', handler);
+        if (result.success) {
+          resolve({ angle: result.angle, path: result.path, number: result.number });
+        } else {
+          reject(new Error(result.error));
+        }
+      }
+    };
+
+    ipcMain.on('capture-angle-viewport-reply', handler);
+    mainWindow.webContents.send('capture-angle-viewport', { angle });
+  });
+}
+
 // IPC handler for iteration step (Phase 8, Task 10)
 ipcMain.handle('run-iteration-step', async (event, {
   originalRequest,
@@ -892,12 +938,37 @@ ipcMain.handle('run-iteration-step', async (event, {
   try {
     console.log(`[Main] Running iteration step ${iteration}/${maxIterations}${previousError ? ' (retry)' : ''}`);
 
-    // Build iteration prompt
+    // Detect requested angles from user's prompt
+    const requestedAngles = detectRequestedAngles(originalRequest);
+    console.log(`[Main] Detected angles in prompt: ${requestedAngles.length > 0 ? requestedAngles.join(', ') : 'none'}`);
+
+    // Build viewport paths array
+    let viewportPaths = [];
+
+    if (requestedAngles.length > 0) {
+      // Capture from each requested angle
+      for (const angle of requestedAngles) {
+        try {
+          const result = await captureAngleViewportFromRenderer(angle);
+          viewportPaths.push({ angle: result.angle, path: result.path });
+          console.log(`[Main] Captured ${angle} view: ${result.path}`);
+        } catch (err) {
+          console.error(`[Main] Failed to capture ${angle} view:`, err);
+          // Continue with other angles
+        }
+      }
+    }
+
+    // If no angle captures or none detected, use the current viewport passed in
+    if (viewportPaths.length === 0) {
+      viewportPaths.push({ angle: 'current', path: viewportPath });
+    }
+
+    // Build iteration prompt with multiple viewports
     const prompt = claudeManager.buildIterationPrompt({
       originalRequest,
       referenceImages,
-      viewportPath,
-      viewportNumber,
+      viewportPaths,
       currentCode,
       iteration,
       maxIterations,

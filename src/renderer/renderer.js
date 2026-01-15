@@ -3684,6 +3684,119 @@ async function saveViewportScreenshot() {
 // Expose for console testing
 window.saveViewportScreenshot = saveViewportScreenshot;
 
+/**
+ * Capture viewport from a specific angle without changing user's view.
+ * @param {string} angle - 'front', 'left', or 'right'
+ * @returns {Promise<Uint8Array>} PNG image buffer
+ */
+async function captureAngleViewport(angle) {
+  // Save current camera state
+  const savedPosition = camera.position.clone();
+  const savedTarget = controls.target.clone();
+  const savedUp = camera.up.clone();
+
+  // Calculate distance to maintain consistent zoom
+  const distance = savedPosition.distanceTo(savedTarget);
+  const target = new THREE.Vector3(0, 0, 0);
+
+  // Position camera based on angle (Z-up coordinate system: +Y=forward, +X=right, +Z=up)
+  switch (angle) {
+    case 'front':
+      // Looking from +Y toward origin (front view)
+      camera.position.set(0, distance, 0);
+      break;
+    case 'left':
+      // Looking from -X toward origin (left side view)
+      camera.position.set(-distance, 0, 0);
+      break;
+    case 'right':
+      // Looking from +X toward origin (right side view)
+      camera.position.set(distance, 0, 0);
+      break;
+    default:
+      throw new Error(`Unknown angle: ${angle}`);
+  }
+
+  // Ensure camera looks at origin with Z-up
+  camera.up.set(0, 0, 1);
+  camera.lookAt(target);
+  controls.target.copy(target);
+  controls.update();
+
+  // Store original clear color
+  const originalClearColor = renderer.getClearColor(new THREE.Color());
+  const originalClearAlpha = renderer.getClearAlpha();
+
+  // Set solid background for screenshot
+  renderer.setClearColor(0x1e1e1e, 1);
+
+  // Render from new angle
+  renderer.render(scene, camera);
+
+  // Capture
+  const canvas = renderer.domElement;
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      // Restore original clear color
+      renderer.setClearColor(originalClearColor, originalClearAlpha);
+
+      // Restore camera state
+      camera.position.copy(savedPosition);
+      camera.up.copy(savedUp);
+      camera.lookAt(savedTarget);
+      controls.target.copy(savedTarget);
+      controls.update();
+
+      // Re-render with restored camera
+      renderer.render(scene, camera);
+
+      if (!blob) {
+        reject(new Error('Failed to capture angle viewport'));
+        return;
+      }
+
+      blob.arrayBuffer().then(buffer => {
+        resolve(new Uint8Array(buffer));
+      }).catch(reject);
+    }, 'image/png');
+  });
+}
+
+/**
+ * IPC handler: Capture viewport from specific angle and save to file
+ */
+ipcRenderer.on('capture-angle-viewport', async (event, { angle, outputPath }) => {
+  try {
+    console.log(`[Renderer] Capturing ${angle} view to ${outputPath}`);
+    const buffer = await captureAngleViewport(angle);
+
+    // Save via main process
+    const result = await ipcRenderer.invoke('save-temp-image', {
+      buffer: Array.from(buffer),
+      type: 'viewport'
+    });
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    event.sender.send('capture-angle-viewport-reply', {
+      success: true,
+      angle,
+      path: result.path,
+      number: result.number
+    });
+  } catch (err) {
+    console.error(`[Renderer] Angle capture error:`, err);
+    event.sender.send('capture-angle-viewport-reply', {
+      success: false,
+      angle,
+      error: err.message
+    });
+  }
+});
+
 // ============================================================
 // PASTE HANDLING FOR REFERENCE IMAGES
 // ============================================================
