@@ -1,7 +1,7 @@
 {
   "name": "claudecad",
   "version": "0.1.0",
-  "description": "AI-powered parametric CAD",
+  "description": "AI-powered semi-parametric CAD",
   "main": "src/main/main.js",
   "scripts": {
     "dev": "vite src/renderer",

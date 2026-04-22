@@ -1,6 +1,6 @@
 # ClaudeCAD
 
-AI-powered parametric CAD for 3D printing. Describe what you want to build in plain English — ClaudeCAD generates the geometry, runs it through a CAD engine, and renders the result in a 3D viewport. Iterate by continuing the conversation.
+AI-powered semi-parametric CAD for 3D printing. Describe what you want to build in plain English — ClaudeCAD generates the geometry, runs it through a CAD engine, and renders the result in a 3D viewport. Iterate by continuing the conversation.
 
 ![ClaudeCAD screenshot placeholder](docs/screenshot.png)
 
