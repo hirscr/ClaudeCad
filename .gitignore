@@ -6,6 +6,8 @@ __pycache__/
 *.stl
 *.glb
 *.gltf
+*.step
+*.bin
 dist/
 build/
 
@@ -26,13 +28,20 @@ models/
 TASK_*.md
 IMPLEMENTATION_COMPLETE.txt
 COLOR_*.md
-COLOR_EXPORT_FINDINGS.md
-COLOR_IMPLEMENTATION_GUIDE.md
 ClaudeCAD-Setup-Guide.md
+arch.md
+artur.md
+lessons_learned.md
+run_tasks.sh
 
 # Prompt history
-prompts*.json
+prompts.json
 prompts_phase*.json
+
+# Test artifacts
+src/python/test_color*.py
+src/python/test_with_colors.py
+src/python/VERIFICATION.md
 
 # Logs
 logs/
