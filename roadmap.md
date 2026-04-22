@@ -1,55 +1,17 @@
 # ClaudeCAD Roadmap
 
-Features deferred from demo scope. Implement after core demo is working and Anthropic pitch is complete.
-
 ---
 
-## Phase 8: Autonomous Iteration Mode
-
-User provides reference images + description, Claude iterates autonomously until satisfied.
-
-### Flow
-1. User: "Build R2D2" + pastes 2-3 reference images
-2. Claude generates Build123d code
-3. Python executes → mesh renders in viewport
-4. Viewport screenshot captured
-5. Claude sees: reference images + current render + code
-6. Claude compares, decides what to fix
-7. Loop back to step 2 until:
-   - User clicks "Stop"
-   - Iteration limit reached (user-configurable, e.g., "try 17 times")
-   - Claude makes no code changes (converged)
-   - Context hits 80% (track tokens internally)
-
-### Technical Requirements
-- **Image input to Claude CLI**: Ctrl+V paste works in interactive mode; need programmatic image passing or upload button in UI
-- **Viewport screenshot**: Three.js canvas → image buffer → send to Claude
-- **Loop driver**: Renderer triggers IPC calls in loop, respects stop conditions
-- **Context tracking**: Estimate token usage, warn/stop at 80%
-- **Model selector**: User chooses Sonnet or Opus (cost/quality tradeoff)
-
-### UI
-- "Autonomous Mode" or "Auto-Iterate" button/command
-- Iteration counter display ("Iteration 5 of 17")
-- Stop button (prominent, always visible during loop)
-- Model dropdown (Sonnet/Opus)
-
----
-
-## Post-Phase 7: Priority Fixes (Demo-Critical)
+## Open Bugs (Demo-Critical)
 
 ### Keep Python Truly Warm
-- src/main/python-manager.js:173-180 closes stdin and forces respawn every call
+- `src/main/python-manager.js:177` calls `stdin.end()`, forcing a respawn on every request
 - This negates the demo's latency promise
-- Fix: Use request delimiter without ending stdin; only recycle on timeout/crash
-
-### Correct Project File Validation
-- src/main/main.js:500 uses `!projectData.code === undefined` which is logically wrong
-- Fix: Replace with clear check like `projectData.code === undefined`
+- Fix: use a request delimiter without ending stdin; only recycle on timeout/crash
 
 ### Remove Duplicate Accelerator
-- src/main/main.js:562-640 assigns CmdOrCtrl+Shift+K to both "New" and "Clear Project"
-- Fix: Keep one, reassign the other to avoid UI confusion
+- `src/main/main.js` assigns `CmdOrCtrl+Shift+K` to both "New" and "Clear Project"
+- Fix: keep one, reassign the other
 
 ---
 
@@ -66,30 +28,23 @@ User provides reference images + description, Claude iterates autonomously until
 
 ---
 
-## Post-Phase 7: Nice-to-Have (Demo-Credibility)
+## Near Term
 
 ### Mesh-to-Shape Grouping
 - Build123d exports each shape as multiple meshes (box = 6 face meshes, etc.)
 - Current color system only colors individual meshes, not whole shapes
-- Problems:
-  - Clicking selects one mesh, not the whole shape
-  - Can't easily color a whole sphere/box
-  - Spatial clustering fails for overlapping shapes
-- Fix: Implement mesh-to-shape mapping so clicking selects/colors entire shapes
+- Problems: clicking selects one mesh, not the whole shape; spatial clustering fails for overlapping shapes
+- Fix: implement mesh-to-shape mapping so clicking selects/colors entire shapes
 - Research: glTF node hierarchy, mesh naming patterns, or vertex connectivity
 
 ### Fix Stats for Indexed Geometry
-- src/renderer/renderer.js:470-486 assumes non-indexed geometry
+- `src/renderer/renderer.js:470-486` assumes non-indexed geometry
 - glTF likely has indices, so face count can be wrong
-- Fix: Use `geometry.index.count / 3` when indexed
+- Fix: use `geometry.index.count / 3` when indexed
 
-### Add Recovery Path UX Note
+### Add Recovery Path UX
 - When Python/Claude fails, display brief message: "Last model kept; try rephrase or Retry"
-- Makes errors feel controlled (no user panic)
-
----
-
-## Post-Demo: Near Term
+- Makes errors feel controlled
 
 ### View Cube
 - 3D cube widget in viewport corner
@@ -104,48 +59,29 @@ User provides reference images + description, Claude iterates autonomously until
 
 ### Point Tool
 - Click to capture exact 3D coordinates
-- Show coordinates in UI
 - Use in prompts: "put a hole at this point"
 
-### Labels System
-- Name faces/edges/features
-- Labels stored with project
-- Reference in chat: "make the mounting hole bigger"
-- Labels visible as floating text in viewport
-- Toggle labels on/off
-
 ### Properties Panel
-- Context-sensitive display
 - Face selected: area, normal vector
 - Edge selected: length, type
 - Vertex selected: coordinates
 - Nothing selected: bounding box, volume, surface area
 
 ### Light Mode Toggle
-- Toggle between two lighting modes:
-  - **Camera-locked**: Light moves with camera (always illuminates front of model)
-  - **Scene-fixed**: Light stays in fixed position as camera orbits
-- Button in toolbar to switch modes
-- Default: Camera-locked (better for inspection)
+- Toggle between camera-locked and scene-fixed lighting
+- Default: camera-locked (better for inspection)
 
 ### Window State Persistence
-- Remember window size and position
-- Remember panel sizes (chat height)
+- Remember window size, position, and panel sizes
 - Restore on next launch
 
 ### Configurable Retry System
 - `maxRetries` setting (default 3)
-- Error categorization with per-type retry counts:
-  - Syntax/import errors (e.g., "name 'x' not defined") → more retries
-  - Geometry failures → fewer retries
-  - Timeouts → no retry
-- Settings UI to expose retry configuration
+- Error categorization: syntax errors → more retries; geometry failures → fewer; timeouts → none
 
 ### Configurable Timeout
 - Claude CLI timeout setting (default 30s)
 - Python execution timeout setting (default 10s)
-- Settings UI to expose
-- Consider: longer timeouts for complex models, shorter for simple edits
 
 ### Additional Export Formats
 - STEP (CAD interchange)
@@ -153,115 +89,73 @@ User provides reference images + description, Claude iterates autonomously until
 
 ---
 
-## Post-Demo: Medium Term
+## Medium Term
 
-### FDM Analysis (Real Geometry Analysis)
-- Actual geometry analysis, not just AI commentary
+### FDM Analysis (Real Geometry)
 - Wall thickness detection via ray casting
 - Overhang angle calculation from face normals
-- Hole diameter checking
-- Bridging distance detection
+- Hole diameter and bridging distance checking
 - Warnings displayed in chat with specific fixes
 
 ### FDM Proactive Mode
-- Toggle in UI: "Designing for: [Any] [FDM] [SLA] [CNC]"
-- When on: Claude receives constraints in system prompt
-- Claude warns/refuses unprintable geometry
-- Constraints: 0.8mm min wall, 45° max overhang, 2mm min hole
+- Toggle: "Designing for: [Any] [FDM] [SLA] [CNC]"
+- Claude receives constraints in system prompt and warns on unprintable geometry
 
 ### SLA/Resin Analysis
-- Drain holes for uncured resin
-- Suction cups (trapped volumes)
-- Minimum feature size
-- Support scarring locations
+- Drain holes, suction cups, minimum feature size, support scarring
 
 ### Injection Molding Analysis
-- Draft angles for ejection
-- Undercuts blocking part removal
-- Uniform wall thickness
-- Gate placement suggestions
-- Sink mark prediction
+- Draft angles, undercuts, uniform wall thickness, gate placement
 
 ### CNC Machining Analysis
-- Tool access constraints
-- Internal corners need radius for tool
-- Deep pocket limitations
-- Fixturing considerations
+- Tool access, internal corners, deep pockets, fixturing
 
 ### Printer/Machine Profiles
 - Printer-specific configs (bed size, nozzle diameter)
-- Material profiles (PLA, PETG, ABS defaults)
-- Machine-specific constraints
-
-### Error Recovery (Advanced)
-- Auto-rollback on failure
-- Attempt alternative approaches automatically
-- Offer concrete alternatives to user
-- Feature-by-feature rebuild from last working state
+- Material profiles (PLA, PETG, ABS)
 
 ### Cross-Platform
-- Windows build
-- Linux build
-- electron-builder configuration for all platforms
+- Windows and Linux builds via electron-builder
 
 ---
 
-## Post-Demo: Long Term
+## Long Term
+
+### Labels System
+- Name faces/edges/features; reference in chat; visible as floating text in viewport
 
 ### Light Theme
-- Full light color palette
-- Theme toggle in settings
+- Full light color palette with theme toggle
 
 ### Unit Selector
-- Millimeters (default)
-- Inches
-- Conversion on export
+- Millimeters (default) and inches with conversion on export
 
 ### Assemblies
-- Multiple parts in one project
-- Part constraints (mate, align)
-- Exploded view
-- Bill of materials
-- Subassembly management
+- Multiple parts, part constraints (mate, align), exploded view, BOM
 
 ### Version History
-- Git-like history within project
-- Branch/merge for design variants
-- Visual diff between versions
+- Git-like history within project with visual diff between versions
 
 ### Cloud Storage
-- Save to cloud (Dropbox, Google Drive, etc.)
-- Share projects via link
+- Save to cloud (Dropbox, Google Drive); share via link
 
 ### Collaboration
-- Real-time multi-user editing
-- Comments and annotations
-- Share with view-only access
+- Real-time multi-user editing, comments, view-only sharing
 
 ### AI Layer Abstraction
-- Swap Claude for other models (Codex, etc.)
-- Configurable AI backend
-- API key management
+- Swap Claude for other models; configurable backend; API key management
 
 ### Photorealistic Rendering
-- three-gpu-pathtracer integration
-- Material properties (metal, plastic, etc.)
-- Environment lighting (HDRI)
-- Progressive refinement
-- High-res export for marketing/documentation
+- three-gpu-pathtracer, material properties, HDRI, progressive refinement
 
 ### ClaudeForm (Sister Product)
-- Organic/mesh modeling (not parametric CAD)
-- Text-to-3D generation (when technology matures)
-- Sculpting tools
-- Blender subprocess architecture (GPL workaround)
-- Surface modeling vs. solid modeling
+- Organic/mesh modeling (not parametric)
+- Text-to-3D when technology matures
+- Blender subprocess architecture
 
 ### Slicer Integration
-- Direct G-code generation
-- Natural language print settings ("add supports", "use tree supports")
-- Preview toolpaths / layer-by-layer view
-- Note: AGPL licensing concerns with bundling CuraEngine/PrusaSlicer
+- G-code generation, natural language print settings, layer preview
+- Note: AGPL licensing concerns with CuraEngine/PrusaSlicer bundling
 
 ---
 
@@ -270,15 +164,11 @@ User provides reference images + description, Claude iterates autonomously until
 ### Topology Mapping
 - Can Build123d export mesh with face IDs preserved?
 - Investigate: vertex colors, face groups, OCP layer access
-- Goal: map clicked triangle back to Build123d face
-- Would enable proper selection without Claude interpretation
+- Goal: map clicked triangle back to Build123d face for proper selection
 
 ### Slicer Licensing
-- CuraEngine is AGPL — can we call it as subprocess?
-- PrusaSlicer is AGPL — same question
-- Alternative: don't bundle, just export STL and let user use their slicer
+- CuraEngine and PrusaSlicer are AGPL — subprocess invocation implications
+- Alternative: export STL and let user use their own slicer
 
 ### Plugin System
-- User-installable extensions
-- Custom tools and workflows
-- Marketplace for community plugins
+- User-installable extensions, custom tools, community marketplace
