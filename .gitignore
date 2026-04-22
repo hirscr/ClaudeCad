@@ -8,3 +8,32 @@ __pycache__/
 *.gltf
 dist/
 build/
+
+# Claude ops / internal tooling
+CLAUDE.md
+CONTINUE.md
+STATE.md
+.claude/
+agents/
+docs/
+ignorethis/
+MIGRATION-PLAN.md
+deploy-template.sh
+assets/
+models/
+
+# Build artifacts / summaries
+TASK_*.md
+IMPLEMENTATION_COMPLETE.txt
+COLOR_*.md
+COLOR_EXPORT_FINDINGS.md
+COLOR_IMPLEMENTATION_GUIDE.md
+ClaudeCAD-Setup-Guide.md
+
+# Prompt history
+prompts*.json
+prompts_phase*.json
+
+# Logs
+logs/
+*.log
